@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python C++ Debug",
+      "type": "pythoncpp",
+      "request": "launch",
+      "pythonLaunchName": "Python: Current File",
+      "cppAttachName": "(lldb) C++ Attach",
+    },
+    {
+      "name": "(lldb) C++ Attach",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/venv/bin/python3",
+      "pid": "${command:pickProcess}",
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    }
+
+  ]
+}

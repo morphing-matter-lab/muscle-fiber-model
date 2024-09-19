@@ -1,6 +1,5 @@
 venv/
 build/
 deps/
-.vscode/
 *.ini
 *.so
