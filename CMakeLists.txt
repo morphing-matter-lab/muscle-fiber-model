@@ -6,6 +6,11 @@ find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
 
 # Dependencies
 include(FetchContent)
+# eigen
+FetchContent_Declare(Eigen EXCLUDE_FROM_ALL
+  URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip
+  SOURCE_DIR "${ROOT_FOLDER}/deps/eigen-src"
+)
 FetchContent_Declare(nanobind
 	GIT_REPOSITORY https://github.com/wjakob/nanobind.git
 	GIT_TAG 8d7f1ee0621c17fa370b704b2100ffa0243d5bfb
@@ -21,11 +26,18 @@ FetchContent_Declare(optim
 	GIT_TAG ada03c97f6334622a6e6657ff5cb2f599830a979
 	SOURCE_DIR "${ROOT_FOLDER}/deps/optim-src"
 )
-FetchContent_MakeAvailable(nanobind fabsim optim)
+# geometry-central
+FetchContent_Declare(geometry-central EXCLUDE_FROM_ALL 
+  GIT_REPOSITORY https://github.com/nmwsharp/geometry-central.git
+  GIT_TAG 1e9920166112e9c438883d12f3caa04a32c83f42
+  SOURCE_DIR "${ROOT_FOLDER}/deps/geometry-central-src"
+  BINARY_DIR "${ROOT_FOLDER}/deps/geometry-central-build"
+)
+FetchContent_MakeAvailable(eigen nanobind fabsim optim geometry-central)
 
 nanobind_add_module(fabsim_py
 	main.cpp)
-target_link_libraries(fabsim_py PRIVATE fabsim optim)
+target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim geometry-central)
 
 set(CMAKE_INSTALL_PREFIX ${ROOT_FOLDER})
 install(TARGETS fabsim_py
