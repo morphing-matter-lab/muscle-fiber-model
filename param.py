@@ -26,21 +26,27 @@ areas = fabsim_py.compute_area_distortion(V, P, F)
 ps_mesh.add_scalar_quantity("area distortion", np.array(areas), defined_on="faces", cmap="coolwarm", enabled=True)
 ps.reset_camera_to_home_view()
 
-X = 0.9999 * P + 0.0001 * V # push out of plane
+X = 0.99 * P + 0.01 * V # push out of plane
 
+running = False
 def callback():
-  global V, P, X, F
+  global V, P, X, F, running
   thickness = 0.01
   poisson_ratio = 0.3
-  if gui.Button("Simulation"):
-    X = fabsim_py.simulate_shell(V, X, F, [0, 1, 2], thickness, poisson_ratio)
-    ps.get_surface_mesh("param").update_vertex_positions(X)
-    ps.register_surface_mesh("mesh", V, F, smooth_shade=True)
+  young_modulus = 1e7
+  delta_t = 1e-3
+  # if gui.Button("Simulation (static)"):
+  #   X = fabsim_py.simulate_shell(V, X, F, [0, 1, 2], thickness, poisson_ratio)
+  #   ps.get_surface_mesh("param").update_vertex_positions(X)
+  #   ps.register_surface_mesh("mesh", V, F, smooth_shade=True)
 
-  if gui.Button("Dynamic time step"):
-    delta_t = 1e-4
-    X = fabsim_py.simulate_shell_timestep(V, P, X, F, thickness, poisson_ratio, delta_t)
+  if gui.Button("Simulation (dynamic)"):
+    running = True
+  
+  if running:
+    X = fabsim_py.simulate_shell_timestep(V, P, X, F, young_modulus, thickness, poisson_ratio, delta_t)
     ps.get_surface_mesh("param").update_vertex_positions(X)
+    # ps.screenshot()
 
 ps.set_user_callback(callback)
 

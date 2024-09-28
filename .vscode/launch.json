@@ -19,7 +19,7 @@
       "name": "Python: Current File",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "${workspaceFolder}/param.py",
       "console": "integratedTerminal"
     }
 

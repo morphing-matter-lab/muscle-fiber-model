@@ -169,6 +169,7 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
                         const Eigen::MatrixXd &P,
                         const Eigen::MatrixXd &X,
                         const Eigen::MatrixXi &F,
+                        double young_modulus,
                         double thickness,
                         double poisson_ratio,
                         double timestep)
@@ -180,7 +181,7 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
   geometrycentral::surface::VertexPositionGeometry geometry(mesh, P);
   geometry.requireVertexLumpedMassMatrix();
   SparseMatrix<double> per_vertex_mass = geometry.vertexLumpedMassMatrix;
-  
+
   // Convert the per-vertex mass matrix to a per-DOF mass matrix
   std::vector<Triplet<double>> triplets;
   for (int k = 0; k < per_vertex_mass.outerSize(); ++k)
@@ -196,7 +197,6 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
   M.setFromTriplets(triplets.begin(), triplets.end());
 
   // declare ElasticShell object
-  double young_modulus = 1;
   double mass = 0;
 
   fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> model(
@@ -209,12 +209,24 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
 
   VectorXd guess = VectorXd::Zero(X.size());
   VectorXd x = X.reshaped<RowMajor>();
-  solver.solve([&](auto dx)
-               { return model.energy(x + timestep * dx) + dx.dot(M * dx); },
-               [&](auto dx)
-               { return model.gradient(x + timestep * dx) + timestep * M * dx; },
-               [&](auto dx)
-               { return model.hessian(x + timestep * dx) + timestep * timestep * M; }, guess);
+
+  // // damping matrix
+  // SparseMatrix<double> D = lambda * model.hessian(x) + mu * M;
+  // auto energy = [&](const auto &dx) -> double
+  // { return model.energy(x + timestep * dx) + 0.5 * dx.dot((M + timestep * D) * dx); };
+  // auto grad = [&](const auto &dx) -> VectorXd
+  // { return timestep * model.gradient(x + timestep * dx) + (M + timestep * D) * dx; };
+  // auto hess = [&](const auto &dx) -> SparseMatrix<double>
+  // { return timestep * timestep * model.hessian(x + timestep * dx) + M + timestep * D; };
+
+  auto energy = [&](const auto &dx) -> double
+  { return model.energy(x + timestep * dx) + 0.5 * dx.dot((M) * dx); };
+  auto grad = [&](const auto &dx) -> VectorXd
+  { return timestep * model.gradient(x + timestep * dx) + M * dx; };
+  auto hess = [&](const auto &dx) -> SparseMatrix<double>
+  { return timestep * timestep * model.hessian(x + timestep * dx) + M; };
+
+  solver.solve(energy, grad, hess, guess);
 
   MatrixXd dX = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
   return X + timestep * dX;
