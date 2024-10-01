@@ -3,3 +3,4 @@ build/
 deps/
 *.ini
 *.so
+.DS_Store

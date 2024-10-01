@@ -43,15 +43,19 @@ for i in range(4, 4 + 4 * n_circle):
   fixed_dofs.append(3 * i + 1)
   fixed_dofs.append(3 * i + 2)
 
-NV, F = fabsim_py.simulate_membrane(V, np.array(B['triangles']), fixed_dofs, 1.5, 0.3)
+NV, F = fabsim_py.simulate_membrane(V, np.array(B['triangles']), fixed_dofs, 1.5, 0.5)
 ps_mesh = ps.register_surface_mesh("my mesh", NV, F, smooth_shade=True)
 
-angles = fabsim_py.compute_stretch_angles(V, NV[:, :2], F)
-dirs = np.empty((len(angles), 2))
-for i in range(len(angles)):
-  dirs[i, 0] = np.cos(angles[i])
-  dirs[i, 1] = np.sin(angles[i])
+# angles = fabsim_py.compute_stretch_angles(V, NV[:, :2], F)
+# dirs = np.empty((len(angles), 2))
+# for i in range(len(angles)):
+#   dirs[i, 0] = np.cos(angles[i])
+#   dirs[i, 1] = np.sin(angles[i])
+# # dirs = fabsim_py.compute_membrane_forces(V, np.array(B['triangles']), NV, 1.5, 0.3)
 
-ps_mesh.add_vector_quantity("stretch directions", dirs, defined_on="faces", enabled=True)
+# vec = fabsim_py.compute_membrane_energies(V, np.array(B['triangles']), NV, 1.5, 0.5)
+
+# ps_mesh.add_scalar_quantity("energy values", vec, defined_on="faces", enabled=True)
+# ps_mesh.add_vector_quantity("force directions", dirs, defined_on="faces", enabled=True)
 
 ps.show()

@@ -106,6 +106,54 @@ boundary_first_flattening(const Eigen::MatrixXd &V,
   return std::make_tuple(NV, F);
 }
 
+Eigen::VectorXd
+compute_membrane_energies(const Eigen::MatrixXd &V,
+                          const Eigen::MatrixXi &F,
+                          const Eigen::MatrixXd &NV,
+                          double stretch_factor,
+                          double poisson_ratio)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double thickness = 1;
+  double young_modulus = 1;
+  double mass = 0;
+
+  fsim::NeoHookeanMembrane model(V / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass);
+  double lambda = young_modulus * poisson_ratio / (1 - std::pow(poisson_ratio, 2));
+  double mu = 0.5 * young_modulus / (1 + poisson_ratio);
+
+  auto elements = model.getElements();
+  VectorXd vec(elements.size());
+  for (int i = 0; i < elements.size(); ++i)
+  {
+    vec(i) = elements[i].energy(NV.reshaped<RowMajor>(), lambda, mu, mass);
+  }
+
+  return vec;
+}
+
+Eigen::MatrixXd
+compute_membrane_forces(const Eigen::MatrixXd &V,
+                        const Eigen::MatrixXi &F,
+                        const Eigen::MatrixXd &NV,
+                        double stretch_factor,
+                        double poisson_ratio)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double thickness = 1;
+  double young_modulus = 1;
+  double mass = 0;
+
+  fsim::NeoHookeanMembrane model(V / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass);
+
+  VectorXd force = -model.gradient(NV.reshaped<RowMajor>());
+  return Map<fsim::Mat3<double>>(force.data(), V.rows(), 3);
+}
+
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXi>
 simulate_membrane(const Eigen::MatrixXd &V,
                   const Eigen::MatrixXi &F,
@@ -169,10 +217,12 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
                         const Eigen::MatrixXd &P,
                         const Eigen::MatrixXd &X,
                         const Eigen::MatrixXi &F,
+                        const Eigen::MatrixXd &vel,
                         double young_modulus,
                         double thickness,
                         double poisson_ratio,
-                        double timestep)
+                        double viscosity,
+                        double dt)
 {
   using namespace Eigen;
 
@@ -199,42 +249,37 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
   // declare ElasticShell object
   double mass = 0;
 
-  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> model(
+  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> shell_model(
       fsim::DiscreteShell<>(P, F, thickness, young_modulus, poisson_ratio),
       fsim::NeoHookeanMembrane(V, F, thickness, young_modulus, poisson_ratio, mass));
+
+  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> damping_model(
+      fsim::DiscreteShell<>(X, F, thickness, young_modulus, poisson_ratio),
+      fsim::NeoHookeanMembrane(X, F, thickness, young_modulus, poisson_ratio, mass));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
 
-  VectorXd guess = VectorXd::Zero(X.size());
+  VectorXd _v = vel.reshaped<RowMajor>();
   VectorXd x = X.reshaped<RowMajor>();
 
-  // // damping matrix
-  // SparseMatrix<double> D = lambda * model.hessian(x) + mu * M;
-  // auto energy = [&](const auto &dx) -> double
-  // { return model.energy(x + timestep * dx) + 0.5 * dx.dot((M + timestep * D) * dx); };
-  // auto grad = [&](const auto &dx) -> VectorXd
-  // { return timestep * model.gradient(x + timestep * dx) + (M + timestep * D) * dx; };
-  // auto hess = [&](const auto &dx) -> SparseMatrix<double>
-  // { return timestep * timestep * model.hessian(x + timestep * dx) + M + timestep * D; };
+  auto energy = [&](const auto &v) -> double
+  { return shell_model.energy(x + dt * v) + viscosity * dt / young_modulus * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
+  auto grad = [&](const auto &v) -> VectorXd
+  { return dt * (shell_model.gradient(x + dt * v) + viscosity * dt / young_modulus * damping_model.gradient(x + dt * v)) + M * (v - _v); };
+  auto hess = [&](const auto &v) -> SparseMatrix<double>
+  { return dt * dt * (shell_model.hessian(x + dt * v) + viscosity * dt / young_modulus * damping_model.hessian(x + dt * v)) + M; };
 
-  auto energy = [&](const auto &dx) -> double
-  { return model.energy(x + timestep * dx) + 0.5 * dx.dot((M) * dx); };
-  auto grad = [&](const auto &dx) -> VectorXd
-  { return timestep * model.gradient(x + timestep * dx) + M * dx; };
-  auto hess = [&](const auto &dx) -> SparseMatrix<double>
-  { return timestep * timestep * model.hessian(x + timestep * dx) + M; };
-
-  solver.solve(energy, grad, hess, guess);
-
-  MatrixXd dX = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
-  return X + timestep * dX;
+  solver.solve(energy, grad, hess, _v);
+  return Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
 }
 
 NB_MODULE(fabsim_py, m)
 {
   m.def("simulate_membrane", &simulate_membrane);
+  m.def("compute_membrane_energies", &compute_membrane_energies);
+  m.def("compute_membrane_forces", &compute_membrane_forces);
   m.def("simulate_shell", &simulate_shell);
   m.def("simulate_shell_timestep", &simulate_shell_timestep);
   m.def("compute_stretch_angles", &compute_stretch_angles);
