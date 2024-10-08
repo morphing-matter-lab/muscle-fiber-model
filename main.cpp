@@ -14,11 +14,12 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-std::vector<double> compute_stretch_angles(const Eigen::MatrixXd &V,
+std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
                                            const Eigen::MatrixXd &P,
                                            const Eigen::MatrixXi &F)
 {
   std::vector<double> angles(F.rows());
+  Eigen::MatrixXd eigenvalues(F.rows(), 2);
 
 #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
   for (int i = 0; i < F.rows(); ++i)
@@ -45,16 +46,20 @@ std::vector<double> compute_stretch_angles(const Eigen::MatrixXd &V,
     // Compute first fundamental form
     Eigen::Matrix2d I = F.transpose() * F;
 
-    // when considering the metric tensor I (instead of the differential J), the angles should be multiplied by two
+    // when considering the metric tensor I (instead of the differential J), the angles should be divided by two
     angles[i] = atan2(I(0, 1) + I(1, 0), I(0, 0) - I(1, 1));
     if (angles[i] < 0)
       angles[i] += 3.14159;
     else
       angles[i] -= 3.14159;
     angles[i] /= 2;
+
+Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(I);
+if (eigensolver.info() != Eigen::Success) std::cout << "Failed\n";
+    eigenvalues.row(i) = eigensolver.eigenvalues();
   }
 
-  return angles;
+  return std::make_tuple(angles, eigenvalues);
 }
 
 std::vector<double> compute_area_distortion(const Eigen::MatrixXd &V,
@@ -265,11 +270,11 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
   VectorXd x = X.reshaped<RowMajor>();
 
   auto energy = [&](const auto &v) -> double
-  { return shell_model.energy(x + dt * v) + viscosity * dt / young_modulus * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
+  { return shell_model.energy(x + dt * v) + viscosity / young_modulus / dt * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
   auto grad = [&](const auto &v) -> VectorXd
-  { return dt * (shell_model.gradient(x + dt * v) + viscosity * dt / young_modulus * damping_model.gradient(x + dt * v)) + M * (v - _v); };
+  { return dt * shell_model.gradient(x + dt * v) + viscosity / young_modulus * damping_model.gradient(x + dt * v) + M * (v - _v); };
   auto hess = [&](const auto &v) -> SparseMatrix<double>
-  { return dt * dt * (shell_model.hessian(x + dt * v) + viscosity * dt / young_modulus * damping_model.hessian(x + dt * v)) + M; };
+  { return dt * dt * shell_model.hessian(x + dt * v) + viscosity / young_modulus * dt * damping_model.hessian(x + dt * v) + M; };
 
   solver.solve(energy, grad, hess, _v);
   return Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
