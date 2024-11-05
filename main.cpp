@@ -259,8 +259,8 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
       fsim::NeoHookeanMembrane(V, F, thickness, young_modulus, poisson_ratio, mass));
 
   fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> damping_model(
-      fsim::DiscreteShell<>(X, F, thickness, young_modulus, poisson_ratio),
-      fsim::NeoHookeanMembrane(X, F, thickness, young_modulus, poisson_ratio, mass));
+      fsim::DiscreteShell<>(X, F, thickness, 1, poisson_ratio),
+      fsim::NeoHookeanMembrane(X, F, thickness, 1, poisson_ratio, mass));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -270,11 +270,11 @@ simulate_shell_timestep(const Eigen::MatrixXd &V,
   VectorXd x = X.reshaped<RowMajor>();
 
   auto energy = [&](const auto &v) -> double
-  { return shell_model.energy(x + dt * v) + viscosity / young_modulus / dt * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
+  { return shell_model.energy(x + dt * v) + viscosity / dt * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
   auto grad = [&](const auto &v) -> VectorXd
-  { return dt * shell_model.gradient(x + dt * v) + viscosity / young_modulus * damping_model.gradient(x + dt * v) + M * (v - _v); };
+  { return dt * shell_model.gradient(x + dt * v) + viscosity * damping_model.gradient(x + dt * v) + M * (v - _v); };
   auto hess = [&](const auto &v) -> SparseMatrix<double>
-  { return dt * dt * shell_model.hessian(x + dt * v) + viscosity / young_modulus * dt * damping_model.hessian(x + dt * v) + M; };
+  { return dt * dt * shell_model.hessian(x + dt * v) + viscosity * dt * damping_model.hessian(x + dt * v) + M; };
 
   solver.solve(energy, grad, hess, _v);
   return Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
