@@ -5,9 +5,6 @@
 
 #include <optim/NewtonSolver.h>
 #include <fsim/ElasticMembrane.h>
-#include <fsim/ElasticShell.h>
-#include "geometrycentral/surface/boundary_first_flattening.h"
-#include "geometrycentral/surface/vertex_position_geometry.h"
 
 #include <iostream>
 
@@ -15,8 +12,8 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
-                                           const Eigen::MatrixXd &P,
-                                           const Eigen::MatrixXi &F)
+                                                                        const Eigen::MatrixXd &P,
+                                                                        const Eigen::MatrixXi &F)
 {
   std::vector<double> angles(F.rows());
   Eigen::MatrixXd eigenvalues(F.rows(), 2);
@@ -54,8 +51,9 @@ std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Ei
       angles[i] -= 3.14159;
     angles[i] /= 2;
 
-Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(I);
-if (eigensolver.info() != Eigen::Success) std::cout << "Failed\n";
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(I);
+    if (eigensolver.info() != Eigen::Success)
+      std::cout << "Failed\n";
     eigenvalues.row(i) = eigensolver.eigenvalues();
   }
 
@@ -85,30 +83,6 @@ std::vector<double> compute_area_distortion(const Eigen::MatrixXd &V,
   }
 
   return areas;
-}
-
-std::tuple<Eigen::MatrixXd, Eigen::MatrixXi>
-boundary_first_flattening(const Eigen::MatrixXd &V,
-                          const Eigen::MatrixXi &F)
-{
-  using namespace geometrycentral;
-  using namespace geometrycentral::surface;
-
-  // create geometry-central objects
-  ManifoldSurfaceMesh mesh(F);
-  VertexPositionGeometry geometry(mesh, V);
-
-  VertexData<Vector2> parameterization = parameterizeBFF(mesh, geometry);
-
-  Eigen::MatrixXd NV(V.rows(), V.cols());
-
-  for (int i = 0; i < NV.rows(); ++i)
-  {
-    Vector2 v_coord = parameterization[i];
-    NV.row(i) << v_coord.x, v_coord.y, 0;
-  }
-
-  return std::make_tuple(NV, F);
 }
 
 Eigen::VectorXd
@@ -187,107 +161,12 @@ simulate_membrane(const Eigen::MatrixXd &V,
   return std::make_tuple(NV, F);
 }
 
-Eigen::MatrixXd
-simulate_shell(const Eigen::MatrixXd &V,
-               const Eigen::MatrixXd &P,
-               const Eigen::MatrixXi &F,
-               const std::vector<int> &fixed_idx,
-               double thickness,
-               double poisson_ratio)
-{
-  using namespace Eigen;
-
-  // declare ElasticShell object
-  double young_modulus = 1;
-  double mass = 0;
-
-  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> model(
-      fsim::DiscreteShell<>(P, F, thickness, young_modulus, poisson_ratio),
-      fsim::NeoHookeanMembrane(V, F, thickness, young_modulus, poisson_ratio, mass));
-
-  // declare NewtonSolver object
-  optim::NewtonSolver<double> solver;
-  // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-  solver.options.fixed_dofs = fixed_idx;
-  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-
-  solver.solve(model, P.reshaped<RowMajor>());
-
-  MatrixXd NV = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
-  return NV;
-}
-
-Eigen::MatrixXd
-simulate_shell_timestep(const Eigen::MatrixXd &V,
-                        const Eigen::MatrixXd &P,
-                        const Eigen::MatrixXd &X,
-                        const Eigen::MatrixXi &F,
-                        const Eigen::MatrixXd &vel,
-                        double young_modulus,
-                        double thickness,
-                        double poisson_ratio,
-                        double viscosity,
-                        double dt)
-{
-  using namespace Eigen;
-
-  // build lumped mass matrix
-  geometrycentral::surface::ManifoldSurfaceMesh mesh(F);
-  geometrycentral::surface::VertexPositionGeometry geometry(mesh, P);
-  geometry.requireVertexLumpedMassMatrix();
-  SparseMatrix<double> per_vertex_mass = geometry.vertexLumpedMassMatrix;
-
-  // Convert the per-vertex mass matrix to a per-DOF mass matrix
-  std::vector<Triplet<double>> triplets;
-  for (int k = 0; k < per_vertex_mass.outerSize(); ++k)
-  {
-    for (SparseMatrix<double>::InnerIterator it(per_vertex_mass, k); it; ++it)
-    {
-      triplets.emplace_back(3 * it.row() + 0, 3 * it.col() + 0, it.value());
-      triplets.emplace_back(3 * it.row() + 1, 3 * it.col() + 1, it.value());
-      triplets.emplace_back(3 * it.row() + 2, 3 * it.col() + 2, it.value());
-    }
-  }
-  SparseMatrix<double> M(X.size(), X.size());
-  M.setFromTriplets(triplets.begin(), triplets.end());
-
-  // declare ElasticShell object
-  double mass = 0;
-
-  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> shell_model(
-      fsim::DiscreteShell<>(P, F, thickness, young_modulus, poisson_ratio),
-      fsim::NeoHookeanMembrane(V, F, thickness, young_modulus, poisson_ratio, mass));
-
-  fsim::CompositeModel<fsim::DiscreteShell<>, fsim::NeoHookeanMembrane> damping_model(
-      fsim::DiscreteShell<>(X, F, thickness, 1, poisson_ratio),
-      fsim::NeoHookeanMembrane(X, F, thickness, 1, poisson_ratio, mass));
-
-  // declare NewtonSolver object
-  optim::NewtonSolver<double> solver;
-  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-
-  VectorXd _v = vel.reshaped<RowMajor>();
-  VectorXd x = X.reshaped<RowMajor>();
-
-  auto energy = [&](const auto &v) -> double
-  { return shell_model.energy(x + dt * v) + viscosity / dt * damping_model.energy(x + dt * v) + 0.5 * (v - _v).dot(M*(v - _v)); };
-  auto grad = [&](const auto &v) -> VectorXd
-  { return dt * shell_model.gradient(x + dt * v) + viscosity * damping_model.gradient(x + dt * v) + M * (v - _v); };
-  auto hess = [&](const auto &v) -> SparseMatrix<double>
-  { return dt * dt * shell_model.hessian(x + dt * v) + viscosity * dt * damping_model.hessian(x + dt * v) + M; };
-
-  solver.solve(energy, grad, hess, _v);
-  return Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
-}
 
 NB_MODULE(fabsim_py, m)
 {
   m.def("simulate_membrane", &simulate_membrane);
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
-  m.def("simulate_shell", &simulate_shell);
-  m.def("simulate_shell_timestep", &simulate_shell_timestep);
   m.def("compute_stretch_angles", &compute_stretch_angles);
-  m.def("boundary_first_flattening", &boundary_first_flattening);
   m.def("compute_area_distortion", &compute_area_distortion);
 }

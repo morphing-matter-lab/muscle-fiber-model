@@ -1,6 +1,7 @@
-venv/
+.venv/
 build/
 deps/
 *.ini
 *.so
 .DS_Store
+__pycache__
