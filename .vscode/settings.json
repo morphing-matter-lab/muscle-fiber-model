@@ -63,6 +63,8 @@
     "queue": "cpp",
     "typeindex": "cpp",
     "*.ipp": "cpp",
-    "core": "cpp"
+    "core": "cpp",
+    "sparsecore": "cpp",
+    "dense": "cpp"
   }
 }

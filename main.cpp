@@ -4,9 +4,12 @@
 #include <nanobind/stl/tuple.h>
 
 #include <optim/NewtonSolver.h>
+#include <fsim/CompositeModel.h>
 #include <fsim/ElasticMembrane.h>
 
 #include <iostream>
+
+#include "PillarModel.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -58,31 +61,6 @@ std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Ei
   }
 
   return std::make_tuple(angles, eigenvalues);
-}
-
-std::vector<double> compute_area_distortion(const Eigen::MatrixXd &V,
-                                            const Eigen::MatrixXd &P,
-                                            const Eigen::MatrixXi &F)
-{
-  std::vector<double> areas(F.rows());
-
-#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
-  for (int i = 0; i < F.rows(); ++i)
-  {
-    // Get 3D vertex positions
-    Eigen::Vector3d ar = V.row(F(i, 0));
-    Eigen::Vector3d br = V.row(F(i, 1));
-    Eigen::Vector3d cr = V.row(F(i, 2));
-
-    // Get 2D vertex positions
-    Eigen::Vector3d a = P.row(F(i, 0));
-    Eigen::Vector3d b = P.row(F(i, 1));
-    Eigen::Vector3d c = P.row(F(i, 2));
-
-    areas[i] = (b - a).cross(c - a).norm() / (br - ar).cross(cr - ar).norm();
-  }
-
-  return areas;
 }
 
 Eigen::VectorXd
@@ -145,14 +123,16 @@ simulate_membrane(const Eigen::MatrixXd &V,
   // declare NeohookeanMembrane object
   double thickness = 1;
   double young_modulus = 1;
+  double pillar_modulus = 1;
   double mass = 0;
 
-  fsim::NeoHookeanMembrane model(V / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass);
+  fsim::CompositeModel model(
+    fsim::NeoHookeanMembrane(V / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass), 
+    PillarModel(V, fixed_idx, pillar_modulus));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-  solver.options.fixed_dofs = fixed_idx;
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
 
   solver.solve(model, V.reshaped<RowMajor>());
@@ -168,5 +148,4 @@ NB_MODULE(fabsim_py, m)
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
   m.def("compute_stretch_angles", &compute_stretch_angles);
-  m.def("compute_area_distortion", &compute_area_distortion);
 }

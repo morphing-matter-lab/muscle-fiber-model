@@ -28,6 +28,7 @@ FetchContent_Declare(optim
 FetchContent_MakeAvailable(eigen nanobind fabsim optim)
 
 nanobind_add_module(fabsim_py
+	PillarModel.cpp
 	main.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim)
 

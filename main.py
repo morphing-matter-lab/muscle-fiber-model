@@ -39,12 +39,11 @@ V = np.hstack((np.array(B['vertices']), zeros))
 
 fixed_dofs = []
 for i in range(4, 4 + 4 * n_circle):
-  fixed_dofs.append(3 * i + 0)
-  fixed_dofs.append(3 * i + 1)
-  fixed_dofs.append(3 * i + 2)
+  fixed_dofs.append(i)
 
 NV, F = fabsim_py.simulate_membrane(V, np.array(B['triangles']), fixed_dofs, 1.5, 0.25)
-ps_mesh = ps.register_surface_mesh("my mesh", V, F, smooth_shade=True)
+ps_mesh = ps.register_surface_mesh("initial", V, F, smooth_shade=True)
+ps_mesh = ps.register_surface_mesh("deformed", NV, F, smooth_shade=True)
 
 angles, eigenvalues = fabsim_py.compute_stretch_angles(V, NV[:, :2], F)
 dirs = np.empty((len(angles), 2))
