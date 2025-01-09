@@ -19,7 +19,6 @@ PillarModel::PillarModel(const Eigen::MatrixXd &P,
 double PillarModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
   double w = 0.0;
-  // Spring
   for (const auto &s : _springs)
     w += _modulus * s.energy(X);
 
@@ -30,10 +29,7 @@ void PillarModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X,
                            Eigen::Ref<Eigen::VectorXd> Y) const
 {
   for (const auto &s : _springs)
-  {
     Y.segment<3>(3 * s.idx) += _modulus * s.gradient(X);
-    ;
-  }
 }
 
 Eigen::VectorXd PillarModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X) const
@@ -52,7 +48,6 @@ PillarModel::hessianTriplets(const Eigen::Ref<const Eigen::VectorXd> X) const
 
   std::vector<Triplet<double>> triplets(_springs.size() * 9);
 
-#pragma omp parallel for if (_springs.size() > 1000)
   for (int k = 0; k < _springs.size(); ++k)
   {
     auto s = _springs[k];
