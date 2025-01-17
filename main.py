@@ -3,28 +3,22 @@ import triangle as tr
 import polyscope as ps
 import fabsim_py
 
-vertices = [[-10, -10], [10, -10], [10, 10], [-10, 10]]
+vertices = [[-4, -7.5], [4, -7.5], [4, 7.5], [-4, 7.5]]
 segments = [[0, 1], [1, 2], [2, 3], [3, 0]]
 holes = []
 
-n_circle = 15
+n_circle = 25
 def make_circle(radius, centerX, centerY):
   n = len(vertices)
   for i in range(n_circle):
     vertices.append([centerX + radius * np.cos(2 * i / n_circle * np.pi), centerY + radius * np.sin(2 * i / n_circle * np.pi)])
     segments.append([n + i, n + ((i + 1) % n_circle)])
 
-make_circle(1.25, -8, -8)
-holes.append([-8, -8])
+make_circle(2, 0, -4.5)
+holes.append([0, -4.5])
 
-make_circle(1.25, 8, -8)
-holes.append([8, -8])
-
-make_circle(1.25, 8, 8)
-holes.append([8, 8])
-
-make_circle(1.25, -8, 8)
-holes.append([-8, 8])
+make_circle(2, 0, 4.5)
+holes.append([0, 4.5])
 
 A = dict(vertices=vertices, segments=segments, holes=holes)
 B = tr.triangulate(A, 'pqa0.5')
@@ -38,11 +32,11 @@ zeros = np.zeros((len(B['vertices']), 1))
 V = np.hstack((np.array(B['vertices']), zeros))
 
 fixed_dofs = []
-for i in range(4, 4 + 4 * n_circle):
+for i in range(4, 4 + len(holes) * n_circle):
   fixed_dofs.append(i)
 
 NV, F = fabsim_py.simulate_membrane(V, np.array(B['triangles']), fixed_dofs, 1.5, 0.25)
-ps_mesh = ps.register_surface_mesh("initial", V, F, smooth_shade=True)
+ps_mesh = ps.register_surface_mesh("initial", V, F, smooth_shade=True, enabled=False)
 ps_mesh = ps.register_surface_mesh("deformed", NV, F, smooth_shade=True)
 
 angles, eigenvalues = fabsim_py.compute_stretch_angles(V, NV[:, :2], F)
