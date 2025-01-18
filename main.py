@@ -60,4 +60,39 @@ for i in range(4):
   ps_mesh.add_vector_quantity(f"stress{i * 45}", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
   ps_mesh.add_vector_quantity(f"stress{i * 45 + 180}", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 
-ps.show()
+# ps.show()
+
+# test face 39
+dt = 1 / 24
+kd = 0.1 # rate of dissociation
+k0 = 1e-4
+k1 = 5e-2
+frac_f = 0.7
+frac_s = 0.25
+
+sigmas = []
+for i in range(4):
+  angle = np.pi / 4 * i
+  sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)  
+  sigmas.append(sigma[39])
+sigmas = np.array(sigmas, ndmin=2)
+kf = k0 * np.ones((4, 1)) + k1 * sigmas.T # rate of formation
+print(sigmas.shape)
+
+phi_t = [np.array([0, 0, 0, 0])]
+I = np.identity(4)
+M = (1 + dt * kd) * I + dt / frac_f * kf.dot(np.ones((1, 4)))
+print(M)
+
+for i in range(100):
+  phi_t.append(phi_t[-1] + dt / frac_f * (1 - frac_s - frac_f) * kf.reshape(-1))
+
+phi_t = np.array(phi_t)
+print(phi_t)
+
+import matplotlib.pyplot as plt
+plt.plot(phi_t[:, 0])
+plt.plot(phi_t[:, 1])
+plt.plot(phi_t[:, 2])
+plt.plot(phi_t[:, 3])
+plt.show()
