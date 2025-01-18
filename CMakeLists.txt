@@ -29,6 +29,7 @@ FetchContent_MakeAvailable(eigen nanobind fabsim optim)
 
 nanobind_add_module(fabsim_py
 	PillarModel.cpp
+	FiberStress.cpp
 	main.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim)
 

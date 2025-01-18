@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "PillarModel.h"
+#include "FiberStress.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -148,4 +149,5 @@ NB_MODULE(fabsim_py, m)
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
   m.def("compute_stretch_angles", &compute_stretch_angles);
+  m.def("directional_fiber_stress", &directional_fiber_stress);
 }

@@ -29,24 +29,35 @@ ps.set_give_focus_on_show(True)
 ps.set_ground_plane_mode("shadow_only")
 
 zeros = np.zeros((len(B['vertices']), 1))
-V = np.hstack((np.array(B['vertices']), zeros))
+P = np.hstack((np.array(B['vertices']), zeros))
+F = np.array(B['triangles'])
 
 fixed_dofs = []
 for i in range(4, 4 + len(holes) * n_circle):
   fixed_dofs.append(i)
 
-NV, F = fabsim_py.simulate_membrane(V, np.array(B['triangles']), fixed_dofs, 1.5, 0.25)
-ps_mesh = ps.register_surface_mesh("initial", V, F, smooth_shade=True, enabled=False)
-ps_mesh = ps.register_surface_mesh("deformed", NV, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
+V, F = fabsim_py.simulate_membrane(P, F, fixed_dofs, 1.5, 0.25)
+# V = NV[:, :2]
+ps_mesh = ps.register_surface_mesh("initial", P, F, smooth_shade=True, enabled=False)
+ps_mesh = ps.register_surface_mesh("deformed", V, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
 
-angles, eigenvalues = fabsim_py.compute_stretch_angles(V, NV[:, :2], F)
+angles, eigenvalues = fabsim_py.compute_stretch_angles(V, P, F)
+angles = np.array(angles) + np.pi / 2
 # alignment = eigenvalues[:,0] /  eigenvalues[:,1]
 dirs = np.empty((len(angles), 2))
 for i in range(len(angles)):
   dirs[i, 0] = np.cos(angles[i])
   dirs[i, 1] = np.sin(angles[i])
 
-ps_mesh.add_vector_quantity("strain directions", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
-ps_mesh.add_vector_quantity("strain directions2", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+# ps_mesh.add_vector_quantity("strain directions", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+# ps_mesh.add_vector_quantity("strain directions2", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+
+for i in range(4):
+  angle = np.pi / 4 * i
+  dirs = np.repeat(np.array([[np.cos(angle), np.sin(angle)]]), F.shape[0], axis=0)
+  sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)
+  dirs = dirs * sigma.reshape(sigma.shape[0], 1)
+  ps_mesh.add_vector_quantity(f"stress{i * 45}", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+  ps_mesh.add_vector_quantity(f"stress{i * 45 + 180}", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 
 ps.show()
