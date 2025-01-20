@@ -52,47 +52,87 @@ for i in range(len(angles)):
 # ps_mesh.add_vector_quantity("strain directions", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 # ps_mesh.add_vector_quantity("strain directions2", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 
-for i in range(4):
-  angle = np.pi / 4 * i
-  dirs = np.repeat(np.array([[np.cos(angle), np.sin(angle)]]), F.shape[0], axis=0)
-  sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)
-  dirs = dirs * sigma.reshape(sigma.shape[0], 1)
-  ps_mesh.add_vector_quantity(f"stress{i * 45}", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
-  ps_mesh.add_vector_quantity(f"stress{i * 45 + 180}", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+# for i in range(4):
+#   angle = np.pi / 4 * i
+#   dirs = np.repeat(np.array([[np.cos(angle), np.sin(angle)]]), F.shape[0], axis=0)
+#   sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)
+#   dirs = dirs * sigma.reshape(sigma.shape[0], 1)
+#   ps_mesh.add_vector_quantity(f"stress{i * 45}", dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+#   ps_mesh.add_vector_quantity(f"stress{i * 45 + 180}", -dirs, defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 
 # ps.show()
 
-# test face 39
-dt = 1 / 24
+dt = 1 / 12
 kd = 0.1 # rate of dissociation
 k0 = 1e-4
 k1 = 5e-2
 frac_f = 0.7
 frac_s = 0.25
+n = 4
 
 sigmas = []
+dirs = []
+for i in range(n):
+  angle = np.pi / n * i
+  sigmas.append(fabsim_py.directional_fiber_stress(V, P, F, angle))
+  dirs.append(np.repeat(np.array([[np.cos(angle), np.sin(angle)]]), F.shape[0], axis=0))
+dirs = np.array(dirs)
+sigmas = np.array(sigmas)
+
+for face_id in range(F.shape[0]):
+  sigma = sigmas[:, face_id]
+  sigma = np.array(sigma, ndmin=2)
+  # print(sigma.shape)
+  kf = k0 * np.ones((n, 1)) + k1 * sigma.T # rate of formation
+
+  frac_p = np.array([0, 0, 0, 0])
+  I = np.identity(n)
+  M = (1 + dt * kd) * I + dt / frac_f / n * kf.dot(np.ones((1, n)))
+  # print(M)
+
+  for i in range(1000):
+    b = frac_p + dt / frac_f * (1 - frac_s - frac_f) * kf.reshape(-1)
+    frac_p = np.linalg.solve(M, b)
+    if not np.allclose(np.dot(M, frac_p), b):
+      print(f"Error: {np.linalg.norm(M * frac_p)} != {np.linalg.norm(b)}")
+      break
+  
+  dirs[:, face_id, :] = dirs[:, face_id, :] * np.array(frac_p, ndmin=2).T
+
 for i in range(4):
-  angle = np.pi / 4 * i
-  sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)  
-  sigmas.append(sigma[39])
-sigmas = np.array(sigmas, ndmin=2)
-kf = k0 * np.ones((4, 1)) + k1 * sigmas.T # rate of formation
-print(sigmas.shape)
+  ps_mesh.add_vector_quantity(f"frac_p{i * 45}", dirs[i, :, :], defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
+  ps_mesh.add_vector_quantity(f"frac_p{i * 45 + 180}", -dirs[i, :, :], defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)
 
-phi_t = [np.array([0, 0, 0, 0])]
-I = np.identity(4)
-M = (1 + dt * kd) * I + dt / frac_f * kf.dot(np.ones((1, 4)))
-print(M)
+ps.show()
 
-for i in range(100):
-  phi_t.append(phi_t[-1] + dt / frac_f * (1 - frac_s - frac_f) * kf.reshape(-1))
+def plot_convergence(face_id):
+  sigmas = []
+  for i in range(n):
+    angle = np.pi / n * i
+    sigma = fabsim_py.directional_fiber_stress(V, P, F, angle)  
+    sigmas.append(sigma[face_id])
+  sigmas = np.array(sigmas, ndmin=2)
+  kf = k0 * np.ones((n, 1)) + k1 * sigmas.T # rate of formation
 
-phi_t = np.array(phi_t)
-print(phi_t)
+  phi_t = [np.array([0, 0, 0, 0])]
+  I = np.identity(n)
+  M = (1 + dt * kd) * I + dt / frac_f / n * kf.dot(np.ones((1, n)))
+  print(M)
 
-import matplotlib.pyplot as plt
-plt.plot(phi_t[:, 0])
-plt.plot(phi_t[:, 1])
-plt.plot(phi_t[:, 2])
-plt.plot(phi_t[:, 3])
-plt.show()
+  for i in range(1000):
+    b = phi_t[-1] + dt / frac_f * (1 - frac_s - frac_f) * kf.reshape(-1)
+    x = np.linalg.solve(M, b)
+    if np.allclose(np.dot(M, x), b):
+      phi_t.append(x)
+    else:
+      print(f"Error: {np.linalg.norm(M * x)} != {np.linalg.norm(b)}")
+      break
+
+  phi_t = np.array(phi_t)
+
+  import matplotlib.pyplot as plt
+  plt.plot(phi_t[:, 0])
+  plt.plot(phi_t[:, 1])
+  plt.plot(phi_t[:, 2])
+  plt.plot(phi_t[:, 3])
+  plt.show()
