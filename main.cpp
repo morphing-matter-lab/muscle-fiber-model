@@ -150,4 +150,6 @@ NB_MODULE(fabsim_py, m)
   m.def("compute_membrane_forces", &compute_membrane_forces);
   m.def("compute_stretch_angles", &compute_stretch_angles);
   m.def("directional_fiber_stress", &directional_fiber_stress);
+  m.def("fiber_stress", &fiber_stress);
+  m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
 }

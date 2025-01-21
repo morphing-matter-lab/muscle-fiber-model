@@ -70,34 +70,21 @@ frac_f = 0.7
 frac_s = 0.25
 n = 4
 
-sigmas = []
+sigmas = fabsim_py.fiber_stress(V, P, F, n)
+print(sigmas.shape)
+polymer_frac = np.zeros(sigmas.shape)
+
+for i in range(1000):
+  fabsim_py.polymer_fraction_one_step(polymer_frac, sigmas, k0, k1, kd, frac_f, frac_s, dt)
+  
 dirs = []
 for i in range(n):
   angle = np.pi / n * i
-  sigmas.append(fabsim_py.directional_fiber_stress(V, P, F, angle))
   dirs.append(np.repeat(np.array([[np.cos(angle), np.sin(angle)]]), F.shape[0], axis=0))
 dirs = np.array(dirs)
-sigmas = np.array(sigmas)
 
-for face_id in range(F.shape[0]):
-  sigma = sigmas[:, face_id]
-  sigma = np.array(sigma, ndmin=2)
-  # print(sigma.shape)
-  kf = k0 * np.ones((n, 1)) + k1 * sigma.T # rate of formation
-
-  frac_p = np.array([0, 0, 0, 0])
-  I = np.identity(n)
-  M = (1 + dt * kd) * I + dt / frac_f / n * kf.dot(np.ones((1, n)))
-  # print(M)
-
-  for i in range(1000):
-    b = frac_p + dt / frac_f * (1 - frac_s - frac_f) * kf.reshape(-1)
-    frac_p = np.linalg.solve(M, b)
-    if not np.allclose(np.dot(M, frac_p), b):
-      print(f"Error: {np.linalg.norm(M * frac_p)} != {np.linalg.norm(b)}")
-      break
-  
-  dirs[:, face_id, :] = dirs[:, face_id, :] * np.array(frac_p, ndmin=2).T
+dirs[:, :, 0] = dirs[:, :, 0] * polymer_frac.T
+dirs[:, :, 1] = dirs[:, :, 1] * polymer_frac.T
 
 for i in range(4):
   ps_mesh.add_vector_quantity(f"frac_p{i * 45}", dirs[i, :, :], defined_on="faces", enabled=True, color=(213/255, 202/255, 42/255), length=0.01)

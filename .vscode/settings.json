@@ -65,6 +65,7 @@
     "*.ipp": "cpp",
     "core": "cpp",
     "sparsecore": "cpp",
-    "dense": "cpp"
+    "dense": "cpp",
+    "valarray": "cpp"
   }
 }
