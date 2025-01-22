@@ -37,7 +37,7 @@ Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P,
   const double e0 = 1.2e-1;
   const double e1 = 1.7e-1;
 
-  MatrixXd stress(F.rows(), 4);
+  MatrixXd stress(F.rows(), n);
 #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
   for (int i = 0; i < F.rows(); ++i)
   {
