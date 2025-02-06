@@ -33,6 +33,11 @@ nanobind_add_module(fabsim_py
 	main.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim)
 
+set_target_properties(fabsim_py PROPERTIES
+                             CXX_STANDARD 20
+                             CXX_STANDARD_REQUIRED OFF
+                             CXX_EXTENSIONS ON)
+
 set(CMAKE_INSTALL_PREFIX ${ROOT_FOLDER})
 install(TARGETS fabsim_py
   LIBRARY 

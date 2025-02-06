@@ -66,6 +66,7 @@
     "core": "cpp",
     "sparsecore": "cpp",
     "dense": "cpp",
-    "valarray": "cpp"
+    "valarray": "cpp",
+    "numbers": "cpp"
   }
 }

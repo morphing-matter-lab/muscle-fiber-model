@@ -11,6 +11,7 @@
 
 #include "PillarModel.h"
 #include "FiberStress.h"
+#include "FiberElement.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -124,7 +125,7 @@ simulate_membrane(const Eigen::MatrixXd &V,
   // declare NeohookeanMembrane object
   double thickness = 1;
   double young_modulus = 1;
-  double pillar_modulus = 1;
+  double pillar_modulus = 100;
   double mass = 0;
 
   fsim::CompositeModel model(
