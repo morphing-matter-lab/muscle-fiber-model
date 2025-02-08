@@ -11,7 +11,7 @@
 
 #include "PillarModel.h"
 #include "FiberStress.h"
-#include "FiberElement.h"
+#include "ActinBundle.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -113,36 +113,39 @@ compute_membrane_forces(const Eigen::MatrixXd &V,
   return Map<fsim::Mat3<double>>(force.data(), V.rows(), 3);
 }
 
-std::tuple<Eigen::MatrixXd, Eigen::MatrixXi>
-simulate_membrane(const Eigen::MatrixXd &V,
-                  const Eigen::MatrixXi &F,
-                  const std::vector<int> &fixed_idx,
-                  double stretch_factor,
-                  double poisson_ratio)
+void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::MatrixXd> &Phi,
+                       const std::vector<int> &fixed_idx,
+                       double stretch_factor,
+                       double poisson_ratio,
+                       double sigma_max,
+                       double e0,
+                       double e1)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
   double thickness = 1;
-  double young_modulus = 1;
+  double young_modulus = 70;
   double pillar_modulus = 100;
   double mass = 0;
 
   fsim::CompositeModel model(
-    fsim::NeoHookeanMembrane(V / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass), 
-    PillarModel(V, fixed_idx, pillar_modulus));
+      fsim::NeoHookeanMembrane(P / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass),
+      ActinBundle(P / stretch_factor, F, Phi, thickness, sigma_max, e0, e1));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+  solver.options.fixed_dofs = fixed_idx;
 
   solver.solve(model, V.reshaped<RowMajor>());
 
-  MatrixXd NV = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
-  return std::make_tuple(NV, F);
+  V = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
 }
-
 
 NB_MODULE(fabsim_py, m)
 {
