@@ -32,6 +32,37 @@ Eigen::VectorXd directional_fiber_stress(const Eigen::MatrixXd &V, const Eigen::
   return stress;
 }
 
+Eigen::MatrixXd directional_strain(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXd &F, int n)
+{
+  using namespace Eigen;
+
+  const double e0 = 1.2e-1;
+  const double e1 = 1.7e-1;
+
+  MatrixXd strain(F.rows(), n);
+#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
+  for (int i = 0; i < F.rows(); ++i)
+  {
+    Matrix2d Ds;
+    Ds.col(0) = V.row(F(i, 1)) - V.row(F(i, 0));
+    Ds.col(1) = V.row(F(i, 2)) - V.row(F(i, 0));
+    Matrix2d R;
+    R.col(0) = P.row(F(i, 1)) - P.row(F(i, 0));
+    R.col(1) = P.row(F(i, 2)) - P.row(F(i, 0));
+
+    Matrix2d def_gradient = Ds * R.inverse();
+
+    for (int j = 0; j < n; ++j)
+    {
+      double theta = j * 3.14159 / n;
+      Vector2d Fu = def_gradient * Vector2d(cos(theta), sin(theta));
+
+      strain(i, j) = 0.5 * (Fu.dot(Fu) - 1);
+    }
+  }
+  return strain;
+}
+
 Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXd &F, int n)
 {
   using namespace Eigen;
