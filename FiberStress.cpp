@@ -63,12 +63,9 @@ Eigen::MatrixXd directional_strain(const Eigen::MatrixXd &V, const Eigen::Matrix
   return strain;
 }
 
-Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXd &F, int n)
+Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXd &F, int n, double e0, double e1)
 {
   using namespace Eigen;
-
-  const double e0 = 1.2e-1;
-  const double e1 = 1.7e-1;
 
   MatrixXd stress(F.rows(), n);
 #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
@@ -113,4 +110,47 @@ void polymer_fraction_one_step(nb::DRef<Eigen::MatrixXd> polymer_fraction, const
     MatrixXd M = (1 + dt * kd) * MatrixXd::Identity(n, n) + dt / frac_f / n * kf * RowVectorXd::Ones(n);
     polymer_fraction.row(i) = M.colPivHouseholderQr().solve(b);
   }
+}
+
+Eigen::MatrixXd polymer_fraction_steady_state(const Eigen::MatrixXd &stress, double k0, double k1, double kd, double frac_f, double frac_s)
+{
+  using namespace Eigen;
+
+  int n = stress.cols();
+  assert(stress.cols() == n);
+
+  Eigen::MatrixXd polymer_fraction(stress.rows(), n);
+
+#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
+  for (int i = 0; i < polymer_fraction.rows(); ++i)
+  {
+    VectorXd kf = k0 * RowVectorXd::Ones(n) + k1 * stress.row(i);
+    VectorXd b = 1 / frac_f * (1 - frac_s - frac_f) * kf.transpose();
+    MatrixXd M = kd * MatrixXd::Identity(n, n) + 1 / frac_f / n * kf * RowVectorXd::Ones(n);
+    polymer_fraction.row(i) = M.colPivHouseholderQr().solve(b);
+  }
+
+  return polymer_fraction;
+}
+
+
+Eigen::MatrixXd polymer_fraction_reduced(const Eigen::MatrixXd &stress, double k1, double kd, double frac_f, double frac_s)
+{
+  using namespace Eigen;
+
+  int n = stress.cols();
+  assert(stress.cols() == n);
+
+  Eigen::MatrixXd polymer_fraction(stress.rows(), n);
+
+#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
+  for (int i = 0; i < polymer_fraction.rows(); ++i)
+  {
+    VectorXd kf = RowVectorXd::Ones(n) + k1 * stress.row(i);
+    VectorXd b = (1 - frac_s - frac_f) / frac_f * kf.transpose();
+    MatrixXd M = kd * MatrixXd::Identity(n, n) + 1 / frac_f / n * kf * RowVectorXd::Ones(n);
+    polymer_fraction.row(i) = M.colPivHouseholderQr().solve(b);
+  }
+
+  return polymer_fraction;
 }

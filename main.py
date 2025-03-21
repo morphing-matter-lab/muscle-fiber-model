@@ -3,6 +3,7 @@ import triangle as tr
 import polyscope as ps
 import fabsim_py
 import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
 
 vertices = [
 [4.116003, 1.403990],
@@ -88,7 +89,7 @@ for i in range(n_boundary, n_boundary + len(holes) * n_circle):
 # Phi = np.zeros((F.shape[0], 6))
 
 # V = P.copy()
-# fabsim_py.simulate_membrane(V, P, F, Phi, fixed_dofs, 1.5, 0.25, 1.0, 0.12, 0.17)
+# fabsim_py.simulate_membrane(V, P, F, Phi, fixed_dofs, 1.5, 0.25, 1.0, e0, e1)
 # # V = NV[:, :2]
 # ps_mesh = ps.register_surface_mesh("initial", P, F, smooth_shade=True, enabled=False)
 # ps_mesh = ps.register_surface_mesh("deformed", V, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
@@ -114,9 +115,11 @@ for i in range(n_boundary, n_boundary + len(holes) * n_circle):
 # ps.show()
 
 dt = 1 / 24
-kd = 0.1 # rate of dissociation
 k0 = 1e-4
 k1 = 5e-2
+kd = 0.1 # rate of dissociation
+e0 = 1.2e-1
+e1 = 1.7e-1
 frac_f = 0.7
 frac_s = 0.25
 n = 16
@@ -278,13 +281,21 @@ ps.set_SSAA_factor(3)
 ps.set_view_from_json('{"farClipRatio":20.0,"fov":16.0,"nearClipRatio":0.005,"projectionMode":"Orthographic","viewMat":[1.0,-0.0,0.0,-0.0,0.0,0.997785151004791,-0.0665190145373344,0.000246047973632812,-0.0,0.0665190145373344,0.997785151004791,-25.5602951049805,0.0,0.0,0.0,1.0],"windowHeight":1964,"windowWidth":3456}')
 polymer_frac = np.zeros((F.shape[0], n))
 V = P.copy()
-ps.show()
 
-for k in range(20):
+for k in range(9, 10):
   stretch_factor = 1 + 0.5 * (k + 1) / 10.
-  fabsim_py.simulate_membrane(V, P, F, polymer_frac, fixed_dofs, stretch_factor, 0.25, 1.0, 0.12, 0.17)
+  fabsim_py.simulate_membrane(V, P, F, polymer_frac, fixed_dofs, stretch_factor, 0.25, 1.0, e0, e1)
   ps_mesh = ps.register_surface_mesh("deformed", V, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
-  sigmas = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n)
+  sigmas = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
+  
+  phi = fabsim_py.polymer_fraction_reduced(sigmas, k1 / k0, kd / k0, frac_f, frac_s)
+
+  # phi = fabsim_py.polymer_fraction_steady_state(sigmas, k0, k1, kd, frac_f, frac_s)
+  # verts, faces = polygons(phi, 0.5)
+  # ps.register_surface_mesh("polymer frac", verts, faces, enabled=True, color=(213/255, 202/255, 42/255))
+  # ps.show()
+  # ps.screenshot()
+
 
   # phi_t = np.zeros(n)
   # for i in range(1000):
@@ -303,15 +314,72 @@ for k in range(20):
   # axs[1].set_title('Phi A')
   # plt.show()
 
-  for i in range(10000):
+  for i in range(1000):
     fabsim_py.polymer_fraction_one_step(polymer_frac, sigmas, k0, k1, kd, frac_f, frac_s, dt)
-    fabsim_py.simulate_membrane(V, P, F, polymer_frac, fixed_dofs, stretch_factor, 0.25, 1.0, 0.12, 0.17)
+    fabsim_py.simulate_membrane(V, P, F, polymer_frac, fixed_dofs, stretch_factor, 0.25, 1.0, e0, e1)
     sigmas = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n)
 
   # polar_plot_phi(8)
   # polar_plot_phi(392)
 
-  verts, faces = polygons(polymer_frac, 0.25)
+  verts, faces = polygons(polymer_frac, 0.5)
   ps.register_surface_mesh("polymer frac", verts, faces, enabled=True, color=(213/255, 202/255, 42/255))
+  ps.show()
   ps.screenshot()
-  # ps.show()
+
+# def stress(strain):
+#   stress = np.exp(-(strain / e0)**2)
+#   stress += np.heaviside(strain, 1) * (strain / e1)**2
+
+
+def fitting(strains, phi_measured):
+  def fun(params):
+    k1 = params[0]
+    kd = params[1]
+    e0 = params[2]
+    e1 = params[3]
+
+    stress = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
+    phi = fabsim_py.polymer_fraction_reduced(stress, k1 / k0, kd / k0, frac_f, frac_s)
+
+    return (phi - phi_measured).flatten()
+
+  initial_guess = np.array([5e-2 / 1e-4, 0.1 / 1e-4, 1.2e-1, 1.7e-1])
+  return least_squares(fun, initial_guess)
+
+
+phi_measured = polymer_frac + 0.01 * np.random.default_rng().random(polymer_frac.shape)
+stress = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
+phi = fabsim_py.polymer_fraction_reduced(stress, k1 / k0, kd / k0, frac_f, frac_s)
+print(phi)
+print(polymer_frac)
+print(np.linalg.norm((phi - polymer_frac) / phi))
+
+
+strains = fabsim_py.directional_strain(V, P, F, n)
+params = fitting(strains, phi_measured)
+print(params.x)
+print(k1 / k0, kd / k0, e0, e1)
+print(params.fun.reshape(phi_measured.shape) - phi_measured)
+
+verts, faces = polygons(phi_measured, 0.5)
+ps.register_surface_mesh("polymer frac", verts, faces, enabled=True, color=(213/255, 202/255, 42/255))
+ps.show()
+ps.screenshot()
+
+k1 = params.x[0]
+kd = params.x[1]
+e0 = params.x[2]
+e1 = params.x[3]
+
+polymer_frac = np.zeros((F.shape[0], n))
+for i in range(10000):
+  sigmas = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
+  fabsim_py.polymer_fraction_one_step(polymer_frac, sigmas, k0, k0 * k1, k0 * kd, frac_f, frac_s, dt)
+  fabsim_py.simulate_membrane(V, P, F, polymer_frac, fixed_dofs, stretch_factor, 0.25, 1.0, e0, e1)
+
+ps_mesh = ps.register_surface_mesh("deformed", V, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
+verts, faces = polygons(polymer_frac, 0.5)
+ps.register_surface_mesh("polymer frac", verts, faces, enabled=True, color=(213/255, 202/255, 42/255))
+ps.screenshot()
+ps.show()
