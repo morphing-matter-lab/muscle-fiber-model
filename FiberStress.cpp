@@ -136,21 +136,5 @@ Eigen::MatrixXd polymer_fraction_steady_state(const Eigen::MatrixXd &stress, dou
 
 Eigen::MatrixXd polymer_fraction_reduced(const Eigen::MatrixXd &stress, double k1, double kd, double frac_f, double frac_s)
 {
-  using namespace Eigen;
-
-  int n = stress.cols();
-  assert(stress.cols() == n);
-
-  Eigen::MatrixXd polymer_fraction(stress.rows(), n);
-
-#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
-  for (int i = 0; i < polymer_fraction.rows(); ++i)
-  {
-    VectorXd kf = RowVectorXd::Ones(n) + k1 * stress.row(i);
-    VectorXd b = (1 - frac_s - frac_f) / frac_f * kf.transpose();
-    MatrixXd M = kd * MatrixXd::Identity(n, n) + 1 / frac_f / n * kf * RowVectorXd::Ones(n);
-    polymer_fraction.row(i) = M.colPivHouseholderQr().solve(b);
-  }
-
-  return polymer_fraction;
+  return polymer_fraction_steady_state(stress, 1, k1, kd, frac_f, frac_s);
 }

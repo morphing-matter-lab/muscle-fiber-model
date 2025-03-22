@@ -159,5 +159,4 @@ NB_MODULE(fabsim_py, m)
   m.def("fiber_stress", &fiber_stress, "V"_a, "P"_a, "F"_a, "n"_a, "e0"_a = 1.2e-1, "e1"_a = 1.7e-1);
   m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
-  m.def("polymer_fraction_reduced", &polymer_fraction_reduced);
 }

@@ -288,7 +288,7 @@ for k in range(9, 10):
   ps_mesh = ps.register_surface_mesh("deformed", V, F, smooth_shade=True, color=(42/255, 53/255, 213/255))
   sigmas = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
   
-  phi = fabsim_py.polymer_fraction_reduced(sigmas, k1 / k0, kd / k0, frac_f, frac_s)
+  phi = fabsim_py.polymer_fraction_steady_state(sigmas, 1, k1 / k0, kd / k0, frac_f, frac_s)
 
   # phi = fabsim_py.polymer_fraction_steady_state(sigmas, k0, k1, kd, frac_f, frac_s)
   # verts, faces = polygons(phi, 0.5)
@@ -340,17 +340,17 @@ def fitting(strains, phi_measured):
     e1 = params[3]
 
     stress = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
-    phi = fabsim_py.polymer_fraction_reduced(stress, k1 / k0, kd / k0, frac_f, frac_s)
+    phi = fabsim_py.polymer_fraction_steady_state(stress, 1, k1 / k0, kd / k0, frac_f, frac_s)
 
     return (phi - phi_measured).flatten()
 
-  initial_guess = np.array([5e-2 / 1e-4, 0.1 / 1e-4, 1.2e-1, 1.7e-1])
+  initial_guess = np.array([5e-2, 0.1, 1.2e-1, 1.7e-1])
   return least_squares(fun, initial_guess)
 
 
 phi_measured = polymer_frac + 0.01 * np.random.default_rng().random(polymer_frac.shape)
 stress = 1.0 * fabsim_py.fiber_stress(V, P / stretch_factor, F, n, e0, e1)
-phi = fabsim_py.polymer_fraction_reduced(stress, k1 / k0, kd / k0, frac_f, frac_s)
+phi = fabsim_py.polymer_fraction_steady_state(stress, 1, k1 / k0, kd / k0, frac_f, frac_s)
 print(phi)
 print(polymer_frac)
 print(np.linalg.norm((phi - polymer_frac) / phi))
