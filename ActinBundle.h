@@ -12,7 +12,7 @@
 /**
  * template class for isotropic membrane models (e.g. StVK, neohookean...)
  */
-class ActinBundle : public fsim::ModelBase<FiberElement<6>>
+class ActinBundle : public fsim::ModelBase<FiberElement>
 {
 public:
   /**

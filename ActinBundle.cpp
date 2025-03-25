@@ -26,12 +26,12 @@ ActinBundle::ActinBundle(const Eigen::Ref<const fsim::Mat3<double>> V,
 
 double ActinBundle::energy(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
-  return ModelBase<FiberElement<6>>::energy(X, e0, e1);
+  return ModelBase<FiberElement>::energy(X, e0, e1);
 }
 
 void ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref<Eigen::VectorXd> Y) const
 {
-  ModelBase<FiberElement<6>>::gradient(X, Y, e0, e1);
+  ModelBase<FiberElement>::gradient(X, Y, e0, e1);
 }
 
 Eigen::VectorXd ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X) const
@@ -45,11 +45,11 @@ Eigen::VectorXd ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X)
 
 Eigen::SparseMatrix<double> ActinBundle::hessian(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
-  return ModelBase<FiberElement<6>>::hessian(X, e0, e1);
+  return ModelBase<FiberElement>::hessian(X, e0, e1);
 }
 
 std::vector<Eigen::Triplet<double>>
 ActinBundle::hessianTriplets(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
-  return ModelBase<FiberElement<6>>::hessianTriplets(X, e0, e1);
+  return ModelBase<FiberElement>::hessianTriplets(X, e0, e1);
 }
