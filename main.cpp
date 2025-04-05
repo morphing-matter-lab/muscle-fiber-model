@@ -7,6 +7,9 @@
 #include <fsim/CompositeModel.h>
 #include <fsim/ElasticMembrane.h>
 
+#include "TinyAD/Utils/Helpers.hh"
+#include "TinyAD/ScalarFunction.hh"
+
 #include <iostream>
 
 #include "PillarModel.h"
@@ -147,6 +150,53 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 
   V = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
 }
+
+void simulate_pillar(nb::DRef<Eigen::MatrixXd> V,
+      const nb::DRef<Eigen::MatrixXi> &F,
+      const std::vector<int> &fixed_idx,
+      double poisson_ratio,
+      double mass)
+{
+  TinyAD::ScalarFunction<3, double, Eigen::Index> func = TinyAD::scalar_function<3>(TinyAD::range(V.rows()));
+
+  const double young_modulus = 1;
+  const double lambda = young_modulus * poisson_ratio / (1 - std::pow(poisson_ratio, 2));
+  const double mu = 0.5 * young_modulus / (1 + poisson_ratio);
+
+  std::vector<Eigen::Matrix3d> DmInv(F.rows());
+
+  for(int i = 0; i < F.rows(); ++i)
+  {
+    Eigen::Matrix3d Dm;
+    Dm.col(0) = V.row(F(i, 0)) - V.row(F(i, 3));
+    Dm.col(1) = V.row(F(i, 1)) - V.row(F(i, 3));
+    Dm.col(2) = V.row(F(i, 2)) - V.row(F(i, 3));
+
+    DmInv[i] = Dm.inverse();
+  }
+
+  func.add_elements<4>(
+      TinyAD::range(F.rows()), [&](auto& element) -> TINYAD_SCALAR_TYPE(element) {
+    using T = TINYAD_SCALAR_TYPE(element);
+    Eigen::Index f_idx = element.handle;
+
+    Eigen::Matrix<T, 3, 3> Ds;
+    Ds.col(0) = element.variables(F(f_idx, 0)) - element.variables(F(f_idx, 3));
+    Ds.col(1) = element.variables(F(f_idx, 1)) - element.variables(F(f_idx, 3));
+    Ds.col(2) = element.variables(F(f_idx, 2)) - element.variables(F(f_idx, 3));
+    Eigen::Matrix<T, 3, 3> defo_gradient = Ds * DmInv[f_idx];
+    T J = defo_gradient.determinant();
+
+    double coeff = 1 / 6. * std::abs(DmInv[f_idx].determinant());
+
+    Eigen::Matrix<T, 3, 1> centroid = (element.variables(F(f_idx, 0)) + element.variables(F(f_idx, 1)) 
+      + element.variables(F(f_idx, 2)) + element.variables(F(f_idx, 3))) / 4.;
+    
+    return coeff * (mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2)
+      + 9.8 * mass * centroid(2));
+  });
+}
+
 
 NB_MODULE(fabsim_py, m)
 {

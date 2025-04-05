@@ -25,7 +25,12 @@ FetchContent_Declare(optim
 	GIT_TAG ada03c97f6334622a6e6657ff5cb2f599830a979
 	SOURCE_DIR "${ROOT_FOLDER}/deps/optim-src"
 )
-FetchContent_MakeAvailable(eigen nanobind fabsim optim)
+FetchContent_Declare(TinyAD
+  GIT_REPOSITORY https://github.com/patr-schm/TinyAD.git
+  GIT_TAG 81fab13c3884b787c0f03bbbbb95b0f794e54434
+  SOURCE_DIR "${ROOT_FOLDER}/deps/TinyAD-src"
+)
+FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD)
 
 nanobind_add_module(fabsim_py
 	PillarModel.cpp
@@ -33,7 +38,7 @@ nanobind_add_module(fabsim_py
 	FiberElement.cpp
 	ActinBundle.cpp
 	main.cpp)
-target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim)
+target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD)
 
 set_target_properties(fabsim_py PROPERTIES
                              CXX_STANDARD 20
