@@ -15,6 +15,7 @@
 #include "PillarModel.h"
 #include "FiberStress.h"
 #include "ActinBundle.h"
+#include "newton.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -151,9 +152,11 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   V = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
 }
 
-void simulate_pillar(nb::DRef<Eigen::MatrixXd> V,
+void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
+      const nb::DRef<Eigen::MatrixXd> &V,
       const nb::DRef<Eigen::MatrixXi> &F,
       const std::vector<int> &fixed_idx,
+      double stretch_factor,
       double poisson_ratio,
       double mass)
 {
@@ -168,9 +171,9 @@ void simulate_pillar(nb::DRef<Eigen::MatrixXd> V,
   for(int i = 0; i < F.rows(); ++i)
   {
     Eigen::Matrix3d Dm;
-    Dm.col(0) = V.row(F(i, 0)) - V.row(F(i, 3));
-    Dm.col(1) = V.row(F(i, 1)) - V.row(F(i, 3));
-    Dm.col(2) = V.row(F(i, 2)) - V.row(F(i, 3));
+    Dm.col(0) = (V.row(F(i, 0)) - V.row(F(i, 3))) / stretch_factor;
+    Dm.col(1) = (V.row(F(i, 1)) - V.row(F(i, 3))) / stretch_factor;
+    Dm.col(2) = (V.row(F(i, 2)) - V.row(F(i, 3))) / stretch_factor;
 
     DmInv[i] = Dm.inverse();
   }
@@ -186,21 +189,29 @@ void simulate_pillar(nb::DRef<Eigen::MatrixXd> V,
     Ds.col(2) = element.variables(F(f_idx, 2)) - element.variables(F(f_idx, 3));
     Eigen::Matrix<T, 3, 3> defo_gradient = Ds * DmInv[f_idx];
     T J = defo_gradient.determinant();
+    TINYAD_ASSERT_G(J, 0);
 
     double coeff = 1 / 6. * std::abs(DmInv[f_idx].determinant());
 
     Eigen::Matrix<T, 3, 1> centroid = (element.variables(F(f_idx, 0)) + element.variables(F(f_idx, 1)) 
       + element.variables(F(f_idx, 2)) + element.variables(F(f_idx, 3))) / 4.;
-    
-    return coeff * (mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2)
-      + 9.8 * mass * centroid(2));
+
+    return coeff * (mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2) + 9.8 * mass * centroid(2));
   });
+
+  Eigen::VectorXd x = NV.reshaped<Eigen::RowMajor>();
+
+  LLTSolver solver;
+  newton(x, func, solver, 10, 1e-6, true, fixed_idx);
+
+  NV = x.reshaped<Eigen::RowMajor>(V.rows(), 3);
 }
 
 
 NB_MODULE(fabsim_py, m)
 {
   m.def("simulate_membrane", &simulate_membrane);
+  m.def("simulate3D", &simulate3D);
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
   m.def("compute_stretch_angles", &compute_stretch_angles);

@@ -30,15 +30,20 @@ FetchContent_Declare(TinyAD
   GIT_TAG 81fab13c3884b787c0f03bbbbb95b0f794e54434
   SOURCE_DIR "${ROOT_FOLDER}/deps/TinyAD-src"
 )
-FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD)
+FetchContent_Declare(libigl
+  URL https://github.com/libigl/libigl/archive/refs/tags/v2.5.0.zip
+  SOURCE_DIR "${ROOT_FOLDER}/deps/libigl-src"
+)
+FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD libigl)
 
 nanobind_add_module(fabsim_py
 	PillarModel.cpp
 	FiberStress.cpp
 	FiberElement.cpp
 	ActinBundle.cpp
+	newton.cpp
 	main.cpp)
-target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD)
+target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core)
 
 set_target_properties(fabsim_py PROPERTIES
                              CXX_STANDARD 20
