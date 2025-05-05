@@ -19,6 +19,7 @@ public:
   Model(const nb::DRef<Eigen::MatrixXd>& P,
     const nb::DRef<Eigen::MatrixXi>& F,
     const nb::DRef<Eigen::MatrixXd>& Phi,
+    const std::vector<int> &fixed_idx,
     double stretch_factor,
     double young_modulus,
     double poisson_ratio,
@@ -39,7 +40,7 @@ public:
 
 private:
   Eigen::SparseMatrix<double> _M;
-  Eigen::SparseMatrix<double> _C;
+  Eigen::SparseMatrix<double> _P;
   Eigen::MatrixXi _F;
   Eigen::MatrixXd _Phi;
   double _lambda;

@@ -16,6 +16,7 @@
 #include "FiberStress.h"
 #include "ActinBundle.h"
 #include "newton.h"
+#include "Model.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -278,4 +279,21 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
+  nb::class_<Model>(m, "Model")
+    .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
+                  const nb::DRef<Eigen::MatrixXi> &,
+                  const nb::DRef<Eigen::MatrixXd> &,
+                  const std::vector<int> &,
+                  double,
+                  double,
+                  double,
+                  double,
+                  double,
+                  double,
+                  double,
+                  double>())
+    .def("force", &Model::force)
+    .def("residual", &Model::residual)
+    .def("acceleration", &Model::acceleration)
+    .def("solve_timestep_newmark", &Model::solve_timestep_newmark);
 }
