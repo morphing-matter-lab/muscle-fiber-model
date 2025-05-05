@@ -82,6 +82,9 @@
     "numericaldiff": "cpp",
     "openglsupport": "cpp",
     "specialfunctions": "cpp",
-    "splines": "cpp"
+    "splines": "cpp",
+    "memory": "cpp",
+    "forward_list": "cpp",
+    "print": "cpp"
   }
 }

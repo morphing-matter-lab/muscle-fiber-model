@@ -155,11 +155,17 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
       const nb::DRef<Eigen::MatrixXd> &V,
       const nb::DRef<Eigen::MatrixXi> &F,
+      const nb::DRef<Eigen::MatrixXd> &Phi,
       const std::vector<int> &fixed_idx,
       double stretch_factor,
       double poisson_ratio,
-      double mass)
+      double sigma_max,
+      double e0,
+      double e1)
 {
+  using namespace Eigen;
+  using namespace std::numbers;
+
   TinyAD::ScalarFunction<3, double, Eigen::Index> func = TinyAD::scalar_function<3>(TinyAD::range(V.rows()));
 
   const double young_modulus = 1;
@@ -192,12 +198,22 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
     TINYAD_ASSERT_G(J, 0);
 
     double coeff = 1 / 6. * std::abs(DmInv[f_idx].determinant());
+    T total_energy = 0;
+    const int n = Phi.cols();
+    for (int i = 0; i < n; ++i)
+    {
+      Vector3d u(cos(i * pi / n), sin(i * pi / n), 0);
+      T e = 0.5 * ((defo_gradient * u).dot(defo_gradient * u) - 1);
+      total_energy += Phi(f_idx, i) * 0.5 / inv_sqrtpi * e0 * erf(e / e0) / n;
+      if (e >= 0)
+        total_energy += Phi(f_idx, i) * pow(e / e1, 2) * e / 3;
+    }
+    total_energy *= sigma_max;
+    total_energy += mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2);
+    total_energy *= coeff;
 
-    Eigen::Matrix<T, 3, 1> centroid = (element.variables(F(f_idx, 0)) + element.variables(F(f_idx, 1)) 
-      + element.variables(F(f_idx, 2)) + element.variables(F(f_idx, 3))) / 4.;
-
-    return coeff * (mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2) + 9.8 * mass * centroid(2));
-  });
+    return total_energy;
+  }); 
 
   Eigen::VectorXd x = NV.reshaped<Eigen::RowMajor>();
 
@@ -207,6 +223,47 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
   NV = x.reshaped<Eigen::RowMajor>(V.rows(), 3);
 }
 
+bool is_point_in_triangle(const Eigen::Vector3d &p, const Eigen::Vector3i &face, const Eigen::MatrixXd &V) {
+  // compute barycentric coordinates
+  double detT = (V(face(0), 0) - V(face(2), 0)) * (V(face(1), 1) - V(face(2), 1)) - (V(face(0), 1) - V(face(2), 1)) * (V(face(1), 0) - V(face(2), 0));
+  double u = ((p(0) - V(face(2), 0)) * (V(face(1), 1) - V(face(2), 1)) - (p(1) - V(face(2), 1)) * (V(face(1), 0) - V(face(2), 0))) / detT;
+  double v = ((V(face(0), 0) - V(face(2), 0)) * (p(1) - V(face(2), 1)) - (V(face(0), 1) - V(face(2), 1)) * (p(0) - V(face(2), 0))) / detT;
+  double w = ((V(face(0), 0) - p(0)) * (V(face(1), 1) - p(1)) - (V(face(0), 1) - p(1)) * (V(face(1), 0) - p(0))) / detT;
+
+  return (u >= -1e-6 && v >= -1e-6 && 1 - u - v >= -1e-6);
+}
+
+Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
+  const nb::DRef<Eigen::MatrixXi> &F,
+  const nb::DRef<Eigen::MatrixXd> &Phi,
+  const nb::DRef<Eigen::MatrixXd> &V_3D,
+  const nb::DRef<Eigen::MatrixXi> &F_3D)
+{
+  using namespace Eigen;
+
+  MatrixXd PhiV3D = MatrixXd::Zero(V_3D.rows(), Phi.cols());
+  for(int i = 0; i < V_3D.rows(); ++i)
+  {
+    for(int j = 0; j < F.rows(); ++j)
+    {
+      if(is_point_in_triangle(V_3D.row(i), F.row(j), V))
+      {
+        PhiV3D.row(i) = Phi.row(j);
+        break;
+      }
+      if(j == F.rows() - 1)
+        std::cout << "Point " << i << " pos: " << V_3D.row(i) << " outside mesh\n";
+    }
+  }
+  
+  MatrixXd Phi_3D(F_3D.rows(), Phi.cols());
+  for(int i = 0; i < F_3D.rows(); ++i)
+  {
+    Phi_3D.row(i) = (PhiV3D.row(F_3D(i, 0)) + PhiV3D.row(F_3D(i, 1)) + PhiV3D.row(F_3D(i, 2)) + PhiV3D.row(F_3D(i, 3))) / 4;
+  }
+
+  return Phi_3D;
+}
 
 NB_MODULE(fabsim_py, m)
 {
@@ -220,4 +277,5 @@ NB_MODULE(fabsim_py, m)
   m.def("fiber_stress", &fiber_stress, "V"_a, "P"_a, "F"_a, "n"_a, "e0"_a = 1.2e-1, "e1"_a = 1.7e-1);
   m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
+  m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
 }
