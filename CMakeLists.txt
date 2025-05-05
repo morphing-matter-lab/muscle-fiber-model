@@ -41,6 +41,7 @@ nanobind_add_module(fabsim_py
 	FiberStress.cpp
 	FiberElement.cpp
 	ActinBundle.cpp
+	Model.cpp
 	newton.cpp
 	main.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core)
