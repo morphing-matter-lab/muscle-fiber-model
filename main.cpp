@@ -10,6 +10,10 @@
 #include "TinyAD/Utils/Helpers.hh"
 #include "TinyAD/ScalarFunction.hh"
 
+#include <igl/barycentric_coordinates.h>
+#include <igl/boundary_loop.h>
+#include <igl/triangle/triangulate.h>
+
 #include <iostream>
 
 #include "PillarModel.h"
@@ -154,15 +158,15 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 }
 
 void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
-      const nb::DRef<Eigen::MatrixXd> &V,
-      const nb::DRef<Eigen::MatrixXi> &F,
-      const nb::DRef<Eigen::MatrixXd> &Phi,
-      const std::vector<int> &fixed_idx,
-      double stretch_factor,
-      double poisson_ratio,
-      double sigma_max,
-      double e0,
-      double e1)
+                const nb::DRef<Eigen::MatrixXd> &V,
+                const nb::DRef<Eigen::MatrixXi> &F,
+                const nb::DRef<Eigen::MatrixXd> &Phi,
+                const std::vector<int> &fixed_idx,
+                double stretch_factor,
+                double poisson_ratio,
+                double sigma_max,
+                double e0,
+                double e1)
 {
   using namespace Eigen;
   using namespace std::numbers;
@@ -175,7 +179,7 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
 
   std::vector<Eigen::Matrix3d> DmInv(F.rows());
 
-  for(int i = 0; i < F.rows(); ++i)
+  for (int i = 0; i < F.rows(); ++i)
   {
     Eigen::Matrix3d Dm;
     Dm.col(0) = (V.row(F(i, 0)) - V.row(F(i, 3))) / stretch_factor;
@@ -186,7 +190,8 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
   }
 
   func.add_elements<4>(
-      TinyAD::range(F.rows()), [&](auto& element) -> TINYAD_SCALAR_TYPE(element) {
+      TinyAD::range(F.rows()), [&](auto &element) -> TINYAD_SCALAR_TYPE(element)
+      {
     using T = TINYAD_SCALAR_TYPE(element);
     Eigen::Index f_idx = element.handle;
 
@@ -213,8 +218,7 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
     total_energy += mu / 2 * ((defo_gradient.transpose() * defo_gradient).trace() - 3) - mu * log(J) + lambda / 2 * pow(log(J), 2);
     total_energy *= coeff;
 
-    return total_energy;
-  }); 
+    return total_energy; });
 
   Eigen::VectorXd x = NV.reshaped<Eigen::RowMajor>();
 
@@ -224,7 +228,8 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
   NV = x.reshaped<Eigen::RowMajor>(V.rows(), 3);
 }
 
-bool is_point_in_triangle(const Eigen::Vector3d &p, const Eigen::Vector3i &face, const Eigen::MatrixXd &V) {
+bool is_point_in_triangle(const Eigen::VectorXd &p, const Eigen::Vector3i &face, const Eigen::MatrixXd &V)
+{
   // compute barycentric coordinates
   double detT = (V(face(0), 0) - V(face(2), 0)) * (V(face(1), 1) - V(face(2), 1)) - (V(face(0), 1) - V(face(2), 1)) * (V(face(1), 0) - V(face(2), 0));
   double u = ((p(0) - V(face(2), 0)) * (V(face(1), 1) - V(face(2), 1)) - (p(1) - V(face(2), 1)) * (V(face(1), 0) - V(face(2), 0))) / detT;
@@ -235,30 +240,30 @@ bool is_point_in_triangle(const Eigen::Vector3d &p, const Eigen::Vector3i &face,
 }
 
 Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
-  const nb::DRef<Eigen::MatrixXi> &F,
-  const nb::DRef<Eigen::MatrixXd> &Phi,
-  const nb::DRef<Eigen::MatrixXd> &V_3D,
-  const nb::DRef<Eigen::MatrixXi> &F_3D)
+                                         const nb::DRef<Eigen::MatrixXi> &F,
+                                         const nb::DRef<Eigen::MatrixXd> &Phi,
+                                         const nb::DRef<Eigen::MatrixXd> &V_3D,
+                                         const nb::DRef<Eigen::MatrixXi> &F_3D)
 {
   using namespace Eigen;
 
   MatrixXd PhiV3D = MatrixXd::Zero(V_3D.rows(), Phi.cols());
-  for(int i = 0; i < V_3D.rows(); ++i)
+  for (int i = 0; i < V_3D.rows(); ++i)
   {
-    for(int j = 0; j < F.rows(); ++j)
+    for (int j = 0; j < F.rows(); ++j)
     {
-      if(is_point_in_triangle(V_3D.row(i), F.row(j), V))
+      if (is_point_in_triangle(V_3D.row(i), F.row(j), V))
       {
         PhiV3D.row(i) = Phi.row(j);
         break;
       }
-      if(j == F.rows() - 1)
+      if (j == F.rows() - 1)
         std::cout << "Point " << i << " pos: " << V_3D.row(i) << " outside mesh\n";
     }
   }
-  
+
   MatrixXd Phi_3D(F_3D.rows(), Phi.cols());
-  for(int i = 0; i < F_3D.rows(); ++i)
+  for (int i = 0; i < F_3D.rows(); ++i)
   {
     Phi_3D.row(i) = (PhiV3D.row(F_3D(i, 0)) + PhiV3D.row(F_3D(i, 1)) + PhiV3D.row(F_3D(i, 2)) + PhiV3D.row(F_3D(i, 3))) / 4;
   }
@@ -266,9 +271,91 @@ Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   return Phi_3D;
 }
 
+Eigen::MatrixXd barycentric_coordinates(const Eigen::MatrixXd &P, const Eigen::MatrixXd &NV, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
+{
+  using namespace Eigen;
+
+  MatrixXd VA(NV.rows(), 2), VB(NV.rows(), 2), VC(NV.rows(), 2);
+  MatrixXd PA(NV.rows(), 2), PB(NV.rows(), 2), PC(NV.rows(), 2);
+
+  for (int i = 0; i < NV.rows(); ++i)
+  {
+    for (int j = 0; j < F.rows(); ++j)
+    {
+      if (is_point_in_triangle(NV.row(i), F.row(j), V))
+      {
+        VA.row(i) = V.row(F(j, 0));
+        VB.row(i) = V.row(F(j, 1));
+        VC.row(i) = V.row(F(j, 2));
+
+        PA.row(i) = P.row(F(j, 0));
+        PB.row(i) = P.row(F(j, 1));
+        PC.row(i) = P.row(F(j, 2));
+        break;
+      }
+      if (j == F.rows() - 1)
+        std::cout << "Point " << i << " pos: " << NV.row(i) << " outside mesh\n";
+    }
+  }
+
+  MatrixXd L;
+  igl::barycentric_coordinates(NV, VA, VB, VC, L);
+
+  return L.col(0).asDiagonal() * PA + L.col(1).asDiagonal() * PB + L.col(2).asDiagonal() * PC;
+}
+
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXi> remesh(const nb::DRef<Eigen::MatrixXd> &V,
+                                                                     const nb::DRef<Eigen::MatrixXd> &P,
+                                                                     const nb::DRef<Eigen::MatrixXi> &F)
+{
+  using namespace Eigen;
+
+  MatrixXd BV; // boundary vertices
+  MatrixXi BE; // boundary edges
+
+  std::vector<std::vector<Index>> L;
+  igl::boundary_loop(F, L);
+
+  for (auto &list : L)
+  {
+    int n = BV.rows();
+    BV.conservativeResize(n + list.size(), 2);
+    BE.conservativeResize(n + list.size(), 2);
+
+    for (int i = 0; i < list.size(); ++i)
+    {      
+      BV.row(n + i) << V.row(list[i]);
+      BE.row(n + i) << n + i, n + ((i + 1) % list.size());
+    }
+  }
+
+  MatrixXd H(2, 2); // hole positions
+  H.row(0) << -2.275, 0;
+  H.row(1) << 2.275, 0;
+  MatrixXd V2; // new vertices
+  MatrixXi F2; // new faces
+  igl::triangle::triangulate(BV, BE, H, "pqa0.1", V2, F2);
+
+  MatrixXd P2 = barycentric_coordinates(P, V2, V, F);
+
+  return std::make_tuple(V2, P2, F2);
+}
+
 NB_MODULE(fabsim_py, m)
 {
   m.def("simulate_membrane", &simulate_membrane);
+  m.def("remesh", &remesh);
+  m.def("boundary_loops", [](const nb::DRef<Eigen::MatrixXi> &F){ 
+    std::vector<std::vector<Eigen::Index>> L;
+    igl::boundary_loop(F, L);
+    return L;
+  });
+  m.def("triangulate", [](const nb::DRef<Eigen::MatrixXd> &P, const nb::DRef<Eigen::MatrixXi> &E, const nb::DRef<Eigen::MatrixXi> &H){
+    Eigen::MatrixXd V2; // new vertices
+    Eigen::MatrixXi F2; // new faces
+    igl::triangle::triangulate(P, E, H, "pqa0.1", V2, F2);
+    return std::make_tuple(V2, F2);
+  });
   m.def("simulate3D", &simulate3D);
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
@@ -280,20 +367,20 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
   nb::class_<Model>(m, "Model")
-    .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
-                  const nb::DRef<Eigen::MatrixXi> &,
-                  const nb::DRef<Eigen::MatrixXd> &,
-                  const std::vector<int> &,
-                  double,
-                  double,
-                  double,
-                  double,
-                  double,
-                  double,
-                  double,
-                  double>())
-    .def("force", &Model::force)
-    .def("residual", &Model::residual)
-    .def("acceleration", &Model::acceleration)
-    .def("solve_timestep_newmark", &Model::solve_timestep_newmark);
+      .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
+                    const nb::DRef<Eigen::MatrixXi> &,
+                    const nb::DRef<Eigen::MatrixXd> &,
+                    const std::vector<int> &,
+                    double,
+                    double,
+                    double,
+                    double,
+                    double,
+                    double,
+                    double,
+                    double>())
+      .def("force", &Model::force)
+      .def("residual", &Model::residual)
+      .def("acceleration", &Model::acceleration)
+      .def("solve_timestep_newmark", &Model::solve_timestep_newmark);
 }

@@ -36,6 +36,8 @@ FetchContent_Declare(libigl
 )
 FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD libigl)
 
+igl_include(restricted triangle)
+
 nanobind_add_module(fabsim_py
 	PillarModel.cpp
 	FiberStress.cpp
@@ -44,7 +46,7 @@ nanobind_add_module(fabsim_py
 	Model.cpp
 	newton.cpp
 	main.cpp)
-target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core)
+target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core igl_restricted::triangle)
 
 set_target_properties(fabsim_py PROPERTIES
                              CXX_STANDARD 20

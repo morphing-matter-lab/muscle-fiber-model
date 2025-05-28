@@ -85,6 +85,8 @@
     "splines": "cpp",
     "memory": "cpp",
     "forward_list": "cpp",
-    "print": "cpp"
+    "print": "cpp",
+    "*.expression": "cpp",
+    "hash_map": "cpp"
   }
 }

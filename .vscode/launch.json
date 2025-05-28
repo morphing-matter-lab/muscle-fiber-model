@@ -12,14 +12,14 @@
       "name": "(lldb) C++ Attach",
       "type": "lldb",
       "request": "attach",
-      "program": "${workspaceFolder}/venv/bin/python",
+      "program": "${workspaceFolder}/.venv/bin/python3",
       "pid": "${command:pickProcess}",
     },
     {
       "name": "Python: Current File",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/param.py",
+      "program": "${workspaceFolder}/debug.py",
       "console": "integratedTerminal"
     }
   ]
