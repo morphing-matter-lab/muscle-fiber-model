@@ -113,7 +113,9 @@ zeros = np.zeros((P.shape[0], 1))
 P = np.hstack((np.array(P), zeros))
 
 # TODO save mesh as top_surface.obj
-
+faces = np.hstack((3 * np.ones(F.shape[0]), F)).flatten()
+mesh = pv.PolyData(P, faces)
+mesh.save("top_surface.obj")
 
 
 

@@ -17,12 +17,12 @@ FetchContent_Declare(nanobind
 )
 FetchContent_Declare(fabsim
 	GIT_REPOSITORY https://github.com/DavidJourdan/fabsim.git
-	GIT_TAG a653337e2eba15bd7fe17391648c08ea3493f464
+	GIT_TAG 54322da6ce1f51bb1e08c65d102be6737a7d0eda
 	SOURCE_DIR "${ROOT_FOLDER}/deps/fabsim-src"
 )
 FetchContent_Declare(optim
 	GIT_REPOSITORY https://github.com/DavidJourdan/optim.git
-	GIT_TAG ada03c97f6334622a6e6657ff5cb2f599830a979
+	GIT_TAG 2a2d48917a9b8d588e4174ad879212748ae5bfe4
 	SOURCE_DIR "${ROOT_FOLDER}/deps/optim-src"
 )
 FetchContent_Declare(TinyAD
@@ -31,7 +31,7 @@ FetchContent_Declare(TinyAD
   SOURCE_DIR "${ROOT_FOLDER}/deps/TinyAD-src"
 )
 FetchContent_Declare(libigl
-  URL https://github.com/libigl/libigl/archive/refs/tags/v2.5.0.zip
+  URL https://github.com/libigl/libigl/archive/refs/tags/v2.6.0.zip
   SOURCE_DIR "${ROOT_FOLDER}/deps/libigl-src"
 )
 FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD libigl)
@@ -50,7 +50,7 @@ target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::c
 
 set_target_properties(fabsim_py PROPERTIES
                              CXX_STANDARD 20
-                             CXX_STANDARD_REQUIRED OFF
+                             CXX_STANDARD_REQUIRED ON
                              CXX_EXTENSIONS ON)
 
 set(CMAKE_INSTALL_PREFIX ${ROOT_FOLDER})

@@ -2,6 +2,7 @@
 #include "newton.h"
 
 #include <igl/massmatrix.h>
+#include <numbers>
 
 Model::Model(const nb::DRef<Eigen::MatrixXd>& V,
              const nb::DRef<Eigen::MatrixXi>& F,

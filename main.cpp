@@ -15,6 +15,7 @@
 #include <igl/triangle/triangulate.h>
 
 #include <iostream>
+#include <numbers>
 
 #include "PillarModel.h"
 #include "FiberStress.h"
