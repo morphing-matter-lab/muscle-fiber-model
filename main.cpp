@@ -2,6 +2,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/string.h>
 
 #include <optim/NewtonSolver.h>
 #include <fsim/CompositeModel.h>
@@ -25,6 +26,7 @@
 
 namespace nb = nanobind;
 using namespace nb::literals;
+using namespace std::numbers;
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
                                                                         const Eigen::MatrixXd &P,
@@ -61,9 +63,9 @@ std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Ei
     // when considering the metric tensor I (instead of the differential J), the angles should be divided by two
     angles[i] = atan2(I(0, 1) + I(1, 0), I(0, 0) - I(1, 1));
     if (angles[i] < 0)
-      angles[i] += 3.14159;
+      angles[i] += pi;
     else
-      angles[i] -= 3.14159;
+      angles[i] -= pi;
     angles[i] /= 2;
 
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(I);
@@ -170,7 +172,6 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
                 double e1)
 {
   using namespace Eigen;
-  using namespace std::numbers;
 
   TinyAD::ScalarFunction<3, double, Eigen::Index> func = TinyAD::scalar_function<3>(TinyAD::range(V.rows()));
 
@@ -272,12 +273,69 @@ Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   return Phi_3D;
 }
 
+Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
+                                   const nb::DRef<Eigen::MatrixXi> &F,
+                                   const nb::DRef<Eigen::MatrixXd> &image,
+                                   double world_coords_to_px,
+                                   int n)
+{
+  using namespace Eigen;
+
+  MatrixXd Phi = MatrixXd::Zero(F.rows(), n);
+  int nX = image.cols();
+  int nY = image.rows();
+
+  for (int i = 0; i < F.rows(); ++i)
+  {
+    double minX = V(F(i, 0), 0);
+    double maxX = V(F(i, 0), 0);
+    double minY = V(F(i, 0), 1);
+    double maxY = V(F(i, 0), 1);
+
+    for (int j = 1; j < 3; ++j)
+    {
+      if(V(F(i, j), 0) < minX)
+        minX = V(F(i, j), 0);
+      if(V(F(i, j), 0) > maxX)
+        maxX = V(F(i, j), 0);
+      if(V(F(i, j), 1) < minY)
+        minY = V(F(i, j), 1);
+      if(V(F(i, j), 1) > maxY)
+        maxY = V(F(i, j), 1);
+    }
+
+    int minIdxX = std::clamp(int(std::floor(world_coords_to_px * minX + nX / 2)), 0, nX);
+    int minIdxY = std::clamp(int(std::floor(-world_coords_to_px * maxY + nY / 2)), 0, nY);
+    int maxIdxX = std::clamp(int(std::ceil(world_coords_to_px * maxX + nX / 2)), 0, nX);
+    int maxIdxY = std::clamp(int(std::ceil(-world_coords_to_px * minY + nY / 2)), 0, nY);
+
+    for (int x = minIdxX; x < maxIdxX; ++x)
+    {
+      for (int y = minIdxY; y < maxIdxY; ++y)
+      {
+        Vector2d coords;
+        coords << x - nX / 2, -y + nY / 2;
+        coords /= world_coords_to_px;
+
+        if (is_point_in_triangle(coords, F.row(i), V))
+        {
+          int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
+          if(image(y, x) != 0)
+            Phi(i, k) += 1;
+        }
+      }
+    }
+  }
+
+  return Phi;
+}
+
 Eigen::MatrixXd barycentric_coordinates(const Eigen::MatrixXd &P, const Eigen::MatrixXd &NV, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
 {
   using namespace Eigen;
 
-  MatrixXd VA(NV.rows(), 2), VB(NV.rows(), 2), VC(NV.rows(), 2);
-  MatrixXd PA(NV.rows(), 2), PB(NV.rows(), 2), PC(NV.rows(), 2);
+  MatrixXd VA(NV.rows(), NV.cols()), VB(NV.rows(), NV.cols()), VC(NV.rows(), NV.cols());
+  MatrixXd PA(NV.rows(), NV.cols()), PB(NV.rows(), NV.cols()), PC(NV.rows(), NV.cols());
 
   for (int i = 0; i < NV.rows(); ++i)
   {
@@ -307,7 +365,8 @@ Eigen::MatrixXd barycentric_coordinates(const Eigen::MatrixXd &P, const Eigen::M
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXi> remesh(const nb::DRef<Eigen::MatrixXd> &V,
                                                                      const nb::DRef<Eigen::MatrixXd> &P,
-                                                                     const nb::DRef<Eigen::MatrixXi> &F)
+                                                                     const nb::DRef<Eigen::MatrixXi> &F,
+                                                                     const std::string &flags)
 {
   using namespace Eigen;
 
@@ -324,8 +383,8 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXi> remesh(const nb::D
     BE.conservativeResize(n + list.size(), 2);
 
     for (int i = 0; i < list.size(); ++i)
-    {      
-      BV.row(n + i) << V.row(list[i]);
+    {
+      BV.row(n + i) << V(list[i], 0), V(list[i], 1);
       BE.row(n + i) << n + i, n + ((i + 1) % list.size());
     }
   }
@@ -335,7 +394,10 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXi> remesh(const nb::D
   H.row(1) << 2.275, 0;
   MatrixXd V2; // new vertices
   MatrixXi F2; // new faces
-  igl::triangle::triangulate(BV, BE, H, "pqa0.1", V2, F2);
+  igl::triangle::triangulate(BV, BE, H, flags, V2, F2);
+
+  V2.conservativeResize(V2.rows(), 3);
+  V2.col(2).setZero();
 
   MatrixXd P2 = barycentric_coordinates(P, V2, V, F);
 
@@ -346,17 +408,17 @@ NB_MODULE(fabsim_py, m)
 {
   m.def("simulate_membrane", &simulate_membrane);
   m.def("remesh", &remesh);
-  m.def("boundary_loops", [](const nb::DRef<Eigen::MatrixXi> &F){ 
+  m.def("boundary_loops", [](const nb::DRef<Eigen::MatrixXi> &F)
+        { 
     std::vector<std::vector<Eigen::Index>> L;
     igl::boundary_loop(F, L);
-    return L;
-  });
-  m.def("triangulate", [](const nb::DRef<Eigen::MatrixXd> &P, const nb::DRef<Eigen::MatrixXi> &E, const nb::DRef<Eigen::MatrixXi> &H){
+    return L; });
+  m.def("triangulate", [](const nb::DRef<Eigen::MatrixXd> &P, const nb::DRef<Eigen::MatrixXi> &E, const nb::DRef<Eigen::MatrixXi> &H, const std::string &flags)
+        {
     Eigen::MatrixXd V2; // new vertices
     Eigen::MatrixXi F2; // new faces
-    igl::triangle::triangulate(P, E, H, "pqa0.1", V2, F2);
-    return std::make_tuple(V2, F2);
-  });
+    igl::triangle::triangulate(P, E, H, flags, V2, F2);
+    return std::make_tuple(V2, F2); });
   m.def("simulate3D", &simulate3D);
   m.def("compute_membrane_energies", &compute_membrane_energies);
   m.def("compute_membrane_forces", &compute_membrane_forces);
@@ -367,6 +429,7 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
+  m.def("image_data_to_mesh", &image_data_to_mesh);
   nb::class_<Model>(m, "Model")
       .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
                     const nb::DRef<Eigen::MatrixXi> &,

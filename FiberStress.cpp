@@ -72,11 +72,11 @@ Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P,
   for (int i = 0; i < F.rows(); ++i)
   {
     Matrix2d Ds;
-    Ds.col(0) = V.row(F(i, 1)) - V.row(F(i, 0));
-    Ds.col(1) = V.row(F(i, 2)) - V.row(F(i, 0));
+    Ds.col(0) = V.block<1, 2>(F(i, 1), 0) - V.block<1, 2>(F(i, 0), 0);
+    Ds.col(1) = V.block<1, 2>(F(i, 2), 0) - V.block<1, 2>(F(i, 0), 0);
     Matrix2d R;
-    R.col(0) = P.row(F(i, 1)) - P.row(F(i, 0));
-    R.col(1) = P.row(F(i, 2)) - P.row(F(i, 0));
+    R.col(0) = P.block<1, 2>(F(i, 1), 0) - P.block<1, 2>(F(i, 0), 0);
+    R.col(1) = P.block<1, 2>(F(i, 2), 0) - P.block<1, 2>(F(i, 0), 0);
 
     Matrix2d def_gradient = Ds * R.inverse();
 
