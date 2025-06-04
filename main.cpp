@@ -273,7 +273,7 @@ Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   return Phi_3D;
 }
 
-Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
+Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
                                    const nb::DRef<Eigen::MatrixXi> &F,
                                    const nb::DRef<Eigen::MatrixXd> &image,
                                    double world_coords_to_px,
@@ -319,15 +319,77 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 
         if (is_point_in_triangle(coords, F.row(i), V))
         {
-          int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
           if(image(y, x) != 0)
+          {
+            int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
             Phi(i, k) += 1;
+          }
         }
       }
     }
   }
 
   return Phi;
+}
+
+
+Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
+                                   const nb::DRef<Eigen::MatrixXi> &F,
+                                   const nb::DRef<Eigen::MatrixXd> &image,
+                                   double world_coords_to_px)
+{
+  using namespace Eigen;
+
+  VectorXd res = VectorXd::Zero(F.rows());
+  int nX = image.cols();
+  int nY = image.rows();
+
+  for (int i = 0; i < F.rows(); ++i)
+  {
+    double minX = V(F(i, 0), 0);
+    double maxX = V(F(i, 0), 0);
+    double minY = V(F(i, 0), 1);
+    double maxY = V(F(i, 0), 1);
+
+    for (int j = 1; j < 3; ++j)
+    {
+      if(V(F(i, j), 0) < minX)
+        minX = V(F(i, j), 0);
+      if(V(F(i, j), 0) > maxX)
+        maxX = V(F(i, j), 0);
+      if(V(F(i, j), 1) < minY)
+        minY = V(F(i, j), 1);
+      if(V(F(i, j), 1) > maxY)
+        maxY = V(F(i, j), 1);
+    }
+
+    int minIdxX = std::clamp(int(std::floor(world_coords_to_px * minX + nX / 2)), 0, nX);
+    int minIdxY = std::clamp(int(std::floor(-world_coords_to_px * maxY + nY / 2)), 0, nY);
+    int maxIdxX = std::clamp(int(std::ceil(world_coords_to_px * maxX + nX / 2)), 0, nX);
+    int maxIdxY = std::clamp(int(std::ceil(-world_coords_to_px * minY + nY / 2)), 0, nY);
+
+    int k = 0;
+
+    for (int x = minIdxX; x < maxIdxX; ++x)
+    {
+      for (int y = minIdxY; y < maxIdxY; ++y)
+      {
+        Vector2d coords;
+        coords << x - nX / 2, -y + nY / 2;
+        coords /= world_coords_to_px;
+
+        if (is_point_in_triangle(coords, F.row(i), V))
+        {
+          if(image(y, x) != 0)
+            res(i) += image(y, x);
+            k += 1;
+        }
+      }
+    }
+    res(i) /= k;
+  }
+
+  return res;
 }
 
 Eigen::MatrixXd barycentric_coordinates(const Eigen::MatrixXd &P, const Eigen::MatrixXd &NV, const Eigen::MatrixXd &V, const Eigen::MatrixXi &F)
@@ -430,6 +492,7 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
   m.def("image_data_to_mesh", &image_data_to_mesh);
+  m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   nb::class_<Model>(m, "Model")
       .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
                     const nb::DRef<Eigen::MatrixXi> &,
