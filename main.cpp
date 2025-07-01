@@ -274,35 +274,29 @@ Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 }
 
 Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
-                                   const nb::DRef<Eigen::MatrixXi> &F,
-                                   const nb::DRef<Eigen::MatrixXd> &image,
-                                   double world_coords_to_px,
-                                   int n)
+                                       const nb::DRef<Eigen::MatrixXi> &F,
+                                       const nb::DRef<Eigen::MatrixXd> &image,
+                                       double world_coords_to_px,
+                                       double radius,
+                                       int n)
 {
   using namespace Eigen;
 
-  MatrixXd Phi = MatrixXd::Zero(F.rows(), n);
+  MatrixXd Phi = MatrixXd::Zero(V.rows(), n);
   int nX = image.cols();
   int nY = image.rows();
 
-  for (int i = 0; i < F.rows(); ++i)
-  {
-    double minX = V(F(i, 0), 0);
-    double maxX = V(F(i, 0), 0);
-    double minY = V(F(i, 0), 1);
-    double maxY = V(F(i, 0), 1);
+  const double sigma = 0.3;
 
-    for (int j = 1; j < 3; ++j)
-    {
-      if(V(F(i, j), 0) < minX)
-        minX = V(F(i, j), 0);
-      if(V(F(i, j), 0) > maxX)
-        maxX = V(F(i, j), 0);
-      if(V(F(i, j), 1) < minY)
-        minY = V(F(i, j), 1);
-      if(V(F(i, j), 1) > maxY)
-        maxY = V(F(i, j), 1);
-    }
+  //  lower normal part of gaussian
+  const double normal = 1 / std::sqrt(2 * pi) / sigma;
+
+  for (int i = 0; i < V.rows(); ++i)
+  {
+    double minX = V(i, 0) - radius;
+    double maxX = V(i, 0) + radius;
+    double minY = V(i, 1) - radius;
+    double maxY = V(i, 1) + radius;
 
     int minIdxX = std::clamp(int(std::floor(world_coords_to_px * minX + nX / 2)), 0, nX);
     int minIdxY = std::clamp(int(std::floor(-world_coords_to_px * maxY + nY / 2)), 0, nY);
@@ -317,13 +311,11 @@ Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
         coords << x - nX / 2, -y + nY / 2;
         coords /= world_coords_to_px;
 
-        if (is_point_in_triangle(coords, F.row(i), V))
+        if (image(y, x) != 0)
         {
-          if(image(y, x) != 0)
-          {
-            int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
-            Phi(i, k) += 1;
-          }
+          int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
+          double dist = (V.block<1, 2>(i, 0) - coords.transpose()).norm();
+          Phi(i, k) += std::exp(-std::pow(dist / radius, 2) / 2 / std::pow(sigma, 2)) * normal;
         }
       }
     }
@@ -332,7 +324,6 @@ Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   return Phi;
 }
 
-
 Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
                                    const nb::DRef<Eigen::MatrixXi> &F,
                                    const nb::DRef<Eigen::MatrixXd> &image,
@@ -340,7 +331,9 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 {
   using namespace Eigen;
 
-  VectorXd res = VectorXd::Zero(F.rows());
+  VectorXd res = VectorXd::Zero(V.rows());
+  VectorXd count = VectorXd::Zero(V.rows());
+
   int nX = image.cols();
   int nY = image.rows();
 
@@ -353,13 +346,13 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 
     for (int j = 1; j < 3; ++j)
     {
-      if(V(F(i, j), 0) < minX)
+      if (V(F(i, j), 0) < minX)
         minX = V(F(i, j), 0);
-      if(V(F(i, j), 0) > maxX)
+      if (V(F(i, j), 0) > maxX)
         maxX = V(F(i, j), 0);
-      if(V(F(i, j), 1) < minY)
+      if (V(F(i, j), 1) < minY)
         minY = V(F(i, j), 1);
-      if(V(F(i, j), 1) > maxY)
+      if (V(F(i, j), 1) > maxY)
         maxY = V(F(i, j), 1);
     }
 
@@ -380,14 +373,24 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 
         if (is_point_in_triangle(coords, F.row(i), V))
         {
-          if(image(y, x) != 0)
-            res(i) += image(y, x);
+          if (image(y, x) != 0)
+          {
+            res(F(i, 0)) += image(y, x);
+            res(F(i, 1)) += image(y, x);
+            res(F(i, 2)) += image(y, x);
             k += 1;
+          }
         }
       }
     }
-    res(i) /= k;
+    count(F(i, 0)) += k;
+    count(F(i, 1)) += k;
+    count(F(i, 2)) += k;
   }
+
+  for(int i = 0; i < V.rows(); ++i)
+    if(count(i) > 0)
+      res(i) = res(i) / count(i);
 
   return res;
 }
@@ -492,6 +495,7 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
   m.def("image_data_to_mesh", &image_data_to_mesh);
+  m.def("smooth_data", &smooth_data);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   nb::class_<Model>(m, "Model")
       .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
