@@ -60,7 +60,6 @@ Model::Model(const nb::DRef<Eigen::MatrixXd>& V,
     {
       Vector3d u(cos(i * pi / n), sin(i * pi / n), 0);
       T e = 0.5 * ((defo_gradient * u).dot(defo_gradient * u) - 1);
-      total_energy += _Phi(f_idx, i) * 0.5 / inv_sqrtpi * _e0 * erf(e / _e0) / n;
       if (e >= 0)
         total_energy += _Phi(f_idx, i) * pow(e / _e1, 2) * e / 3;
     }

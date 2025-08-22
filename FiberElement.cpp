@@ -102,9 +102,7 @@ double FiberElement::stressDeriv(double e, double e0, double e1) const
 
 double FiberElement::energy(double e, double e0, double e1) const
 {
-  using namespace std::numbers;
-
-  double res = 0.5 / inv_sqrtpi * e0 * std::erf(e / e0);
+  double res = 0;
   if (e >= 0)
     res += std::pow(e / e1, 2) * e / 3;
   return res;
