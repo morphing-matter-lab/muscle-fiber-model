@@ -45,6 +45,7 @@ nanobind_add_module(fabsim_py
 	ActinBundle.cpp
 	Model.cpp
 	newton.cpp
+	distance.cpp
 	main.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core igl_restricted::triangle)
 

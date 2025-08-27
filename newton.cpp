@@ -1,7 +1,104 @@
 #include "newton.h"
 
 #include <TinyAD/Utils/NewtonDecrement.hh>
+#include <igl/colon.h>
 #include <igl/slice.h>
+#include <igl/slice_into.h>
+
+Eigen::SparseMatrix<double> buildHGN(const Eigen::VectorXd& masses,
+                                     const Eigen::SparseMatrix<double>& P,
+                                     const Eigen::SparseMatrix<double>& M_theta,
+                                     const Eigen::SparseMatrix<double>& H)
+{
+  using namespace Eigen;
+
+  int n = P.cols();
+  int m = P.rows();
+  int nTheta = M_theta.rows();
+
+  // Mass matrix x (P * M * P')
+  SparseMatrix<double> D(n, n);
+  D.reserve(n);
+  for(int i = 0; i < n; ++i)
+    D.insert(i, i) = masses(i);
+  D = (P * D * P.transpose()).eval();
+
+  std::vector<Triplet<double>> v;
+  for(int i = 0; i < D.outerSize(); i++)
+    for(typename SparseMatrix<double>::InnerIterator it(D, i); it; ++it)
+      v.emplace_back(it.row(), it.col(), it.value());
+
+  // Mass matrix theta
+  for(int i = 0; i < M_theta.outerSize(); i++)
+    for(typename SparseMatrix<double>::InnerIterator it(M_theta, i); it; ++it)
+      v.emplace_back(it.row() + m, it.col() + m, it.value());
+
+  // P * (df / dx)' * P'
+  SparseMatrix<double> A = (P * H.block(0, 0, n, n) * P.transpose()).eval();
+  for(int i = 0; i < A.outerSize(); i++)
+    for(typename SparseMatrix<double>::InnerIterator it(A, i); it; ++it)
+    {
+      v.emplace_back(it.row(), it.col() + m + nTheta, it.value());
+      v.emplace_back(it.col() + m + nTheta, it.row(), it.value());
+    }
+
+  // (df / dθ)' * P'
+  A = (H.block(n, 0, nTheta, n) * P.transpose()).eval();
+  for(int i = 0; i < A.outerSize(); i++)
+    for(typename SparseMatrix<double>::InnerIterator it(A, i); it; ++it)
+    {
+      v.emplace_back(it.row() + m, it.col() + m + nTheta, it.value());
+      v.emplace_back(it.col() + m + nTheta, it.row() + m, it.value());
+    }
+
+  SparseMatrix<double> HGN(2 * m + nTheta, 2 * m + nTheta);
+  HGN.setFromTriplets(v.begin(), v.end());
+
+  return HGN;
+}
+
+void updateHGN(Eigen::SparseMatrix<double>& HGN,
+               const Eigen::SparseMatrix<double>& P,
+               const Eigen::SparseMatrix<double>& H)
+{
+  using namespace Eigen;
+
+  int n = P.cols();
+  int m = P.rows();
+  int nTheta = H.rows() - n;
+
+  // P * (df / dx)' * P'
+  Eigen::SparseMatrix<double> A = (P * H.block(0, 0, n, n) * P.transpose()).eval();
+  igl::slice_into(A, igl::colon<int>(0, m - 1), igl::colon<int>(m + nTheta, 2 * m + nTheta - 1), HGN);
+
+  // (df / dθ)' * P'
+  A = (H.block(n, 0, nTheta, n) * P.transpose()).eval();
+  igl::slice_into(A, igl::colon<int>(m, m + nTheta - 1), igl::colon<int>(m + nTheta, 2 * m + nTheta - 1), HGN);
+
+  HGN = SparseMatrix<double>(HGN.selfadjointView<Upper>());
+}
+
+std::vector<int> findCenterFaceIndices(const Eigen::MatrixXd& P, const Eigen::MatrixXi& F)
+{
+  int centerIdx = 0;
+  double dist = (P.row(F(0, 0)) + P.row(F(0, 1)) + P.row(F(0, 2))).norm();
+  for(int i = 0; i < F.rows(); ++i)
+  {
+    if((P.row(F(i, 0)) + P.row(F(i, 1)) + P.row(F(i, 2))).norm() < dist)
+    {
+      dist = (P.row(F(i, 0)) + P.row(F(i, 1)) + P.row(F(i, 2))).norm();
+      centerIdx = i;
+    }
+  }
+
+  // Fixed Indices
+  std::vector<int> fixedIdx = {3 * F(centerIdx, 0), 3 * F(centerIdx, 0) + 1, 3 * F(centerIdx, 0) + 2,
+                               3 * F(centerIdx, 1), 3 * F(centerIdx, 1) + 1, 3 * F(centerIdx, 1) + 2,
+                               3 * F(centerIdx, 2), 3 * F(centerIdx, 2) + 1, 3 * F(centerIdx, 2) + 2};
+  std::sort(fixedIdx.begin(), fixedIdx.end());
+
+  return fixedIdx;
+}
 
 double lineSearch(const Eigen::VectorXd& x0,
                   const Eigen::VectorXd& d,
@@ -122,3 +219,139 @@ void newton(Eigen::VectorXd& x,
   if(verbose)
     std::cout << "Final energy: " << func.eval(x) << "\n";
 }
+
+
+// Eigen::MatrixXd
+// sparse_gauss_newton(const Eigen::MatrixXd& targetV,
+//                     const TinyAD::ScalarFunction<1, double, Eigen::Index>& adjointFunc,
+//                     const std::vector<int>& fixedIdx,
+//                     int max_iters,
+//                     double lim,
+//                     const std::function<void(const Eigen::VectorXd&)>& callback)
+// {
+
+
+//   Eigen::VectorXd theta = theta2.toVector();
+//   Eigen::VectorXd xTarget(targetV.size());
+//   for(int i = 0; i < targetV.rows(); ++i)
+//     for(int j = 0; j < 3; ++j)
+//       xTarget(3 * i + j) = targetV(i, j);
+//   Eigen::VectorXd x = xTarget;
+
+//   LLTSolver adjointSolver;
+
+//   // auto distance = [&](const Eigen::VectorXd& th) {
+//   //   theta2.fromVector(th);
+//   //   auto simFunc = simulationFunction(mesh, MrInv, theta1, theta2, E1, lambda1, lambda2, deltaLambda, thickness);
+//   //   newton(x, simFunc, adjointSolver, 1000, lim, false, fixedIdx);
+
+//   //   return (x - xTarget).dot(masses.cwiseProduct(x - xTarget)) + wM * th.dot(M_theta * th) + wL * th.dot(L * th);
+//   // };
+
+//   // Build matrix P
+//   Eigen::SparseMatrix<double> P = projectionMatrix(fixedIdx, x.size());
+
+//   // Hessian matrix H
+//   Eigen::VectorXd X(targetV.size() + theta.size());
+//   X.head(targetV.size()) = x;
+//   X.tail(theta.size()) = theta;
+//   Eigen::SparseMatrix<double> H = adjointFunc.eval_hessian(X);
+
+//   // Build HGN matrix
+//   Eigen::SparseMatrix<double> HGN = buildHGN(12 * Eigen::VectorXd::Ones(nBoundary), P, Eigen::SparseMatrix<double>{}, H);
+
+//   // auto distanceGrad = [&](const Eigen::VectorXd& th) -> Eigen::VectorXd {
+//   //   Eigen::VectorXd X(targetV.size() + th.size());
+//   //   X.head(targetV.size()) = x;
+//   //   X.tail(th.size()) = th;
+//   //   H = adjointFunc.eval_hessian(X);
+
+//   //   for(int j = 0; j < targetV.size(); ++j)
+//   //     H.coeffRef(j, j) += 1e-10;
+
+//   //   Eigen::SparseMatrix<double> A = (P * H.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
+
+//   //   adjointSolver.factorize(A);
+//   //   if(adjointSolver.info() != Eigen::Success)
+//   //   {
+//   //     auto [f, g, A_proj] = adjointFunc.eval_with_hessian_proj(X);
+//   //     A_proj = (P * A_proj.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
+
+//   //     A = 0.9 * A + 0.1 * A_proj;
+//   //     adjointSolver.factorize(A);
+//   //     if(adjointSolver.info() != Eigen::Success)
+//   //       adjointSolver.factorize(A_proj);
+//   //   }
+
+//   //   Eigen::VectorXd b = P * masses.cwiseProduct(x - xTarget);
+//   //   Eigen::VectorXd dir = adjointSolver.solve(b);
+//   //   if(adjointSolver.info() != Eigen::Success)
+//   //     std::cout << "Solver error\n";
+
+//   //   dir = P.transpose() * dir;
+
+//   //   return -2 * H.block(targetV.size(), 0, th.size(), targetV.size()) * dir + 2 * wM * M_theta * th + 2 * wL * L * th;
+//   // };
+
+//   double energy = distance(theta);
+//   std::cout << "Initial energy: " << energy << std::endl;
+
+//   LUSolver solver;
+
+//   for(int i = 0; i < max_iters; ++i)
+//   {
+//     double f = distance(theta);
+//     Eigen::VectorXd g = distanceGrad(theta);
+
+//     Eigen::VectorXd b(2 * x.size() - 2 * fixedIdx.size() + theta.size());
+//     b.setZero();
+//     b.segment(x.size() - fixedIdx.size(), theta.size()) = -g;
+
+//     // Update HGN
+//     updateHGN(HGN, P, H);
+
+//     if(i == 0)
+//       solver.compute(HGN);
+//     else
+//       solver.factorize(HGN);
+
+//     if(solver.info() != Eigen::Success)
+//     {
+//       std::cout << "Solver error\n";
+//       return targetV;
+//     }
+
+//     Eigen::VectorXd d = solver.solve(b);
+//     Eigen::VectorXd deltaTheta = d.segment(x.size() - fixedIdx.size(), theta.size());
+//     Eigen::VectorXd deltaX = d.segment(0, x.size() - fixedIdx.size());
+//     deltaX = P.transpose() * deltaX;
+
+//     // LINE SEARCH
+//     Eigen::VectorXd x_old = x;
+//     double s = lineSearch(theta, deltaTheta, f, g, distance, [&](double s) { x = x_old + s * deltaX; });
+//     if(s < 0)
+//     {
+//       std::cout << "Line search failed\n";
+//       break;
+//     }
+//     theta += s * deltaTheta;
+
+//     std::cout << "Decrement in iteration " << i << ": " << TinyAD::newton_decrement(deltaTheta, g)
+//               << "\tDistance: " << (x - xTarget).dot(masses.cwiseProduct(x - xTarget)) << "\tStep size: " << s
+//               << std::endl;
+//     if(TinyAD::newton_decrement(deltaTheta, g) < lim || solver.info() != Eigen::Success)
+//       break;
+
+//     callback(x);
+//   }
+
+//   std::cout << "Final energy: " << distance(theta) << "\n";
+
+//   Eigen::MatrixXd V(targetV.rows(), 3);
+//   for(int i = 0; i < targetV.rows(); ++i)
+//     for(int j = 0; j < 3; ++j)
+//       V(i, j) = x(3 * i + j);
+
+//   theta2.fromVector(theta);
+//   return V;
+// }

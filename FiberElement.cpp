@@ -65,7 +65,8 @@ Eigen::Matrix2d FiberElement::stress(const Eigen::Matrix<double, 3, 2> &F, doubl
 
 double FiberElement::stress(double e, double e0, double e1) const
 {
-  double res = std::exp(-std::pow(e / e0, 2));
+  // double res = std::exp(-std::pow(e / e0, 2));
+  double res = 0;
   if (e >= 0)
     res += std::pow(e / e1, 2);
   return res;
@@ -93,7 +94,8 @@ Eigen::Matrix3d FiberElement::elasticityTensor(const Eigen::Matrix<double, 3, 2>
 
 double FiberElement::stressDeriv(double e, double e0, double e1) const
 {
-  double stress_deriv = -2 * e / e0 / e0 * std::exp(-std::pow(e / e0, 2));
+  // double stress_deriv = -2 * e / e0 / e0 * std::exp(-std::pow(e / e0, 2));
+  double stress_deriv = 0;
   if (e >= 0)
     stress_deriv += 2 * e / std::pow(e1, 2);
 
@@ -116,6 +118,7 @@ double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double e0
   Matrix<double, 3, 2> F = deformationGradient(X);
 
   double res = 0;
+    // double res = 0.5 / inv_sqrtpi * e0 * std::erf(e / e0);
   const int n = phi.size();
   for (int i = 0; i < n; ++i)
   {

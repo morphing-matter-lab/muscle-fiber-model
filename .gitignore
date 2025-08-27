@@ -5,3 +5,4 @@ deps/
 *.so
 .DS_Store
 __pycache__
+data/temp.png

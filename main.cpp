@@ -23,6 +23,7 @@
 #include "ActinBundle.h"
 #include "newton.h"
 #include "Model.h"
+#include "distance.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -212,6 +213,7 @@ void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
     {
       Vector3d u(cos(i * pi / n), sin(i * pi / n), 0);
       T e = 0.5 * ((defo_gradient * u).dot(defo_gradient * u) - 1);
+            // total_energy += Phi(f_idx, i) * 0.5 / inv_sqrtpi * e0 * erf(e / e0) / n;
       if (e >= 0)
         total_energy += Phi(f_idx, i) * pow(e / e1, 2) * e / 3;
     }
@@ -494,7 +496,7 @@ NB_MODULE(fabsim_py, m)
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
   m.def("image_data_to_mesh", &image_data_to_mesh);
-  // m.def("smooth_data", &smooth_data);
+  m.def("distance", &distance);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   nb::class_<Model>(m, "Model")
       .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
