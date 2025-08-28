@@ -497,6 +497,7 @@ NB_MODULE(fabsim_py, m)
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
   m.def("image_data_to_mesh", &image_data_to_mesh);
   m.def("distance", &distance);
+  m.def("distance_gradient", &distanceGrad);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   nb::class_<Model>(m, "Model")
       .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,

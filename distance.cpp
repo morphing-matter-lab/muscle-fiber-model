@@ -54,21 +54,11 @@ Eigen::VectorXd distanceGrad(const Eigen::MatrixXd &V, const std::vector<int> &i
   for(int idx: indices)
   {
     // transform coordinates to upper-right corner and flip y axis
-    double v_x = V(idx, 0);
-    std::cout << v_x << " ";
-    if(v_x < 0)
-      v_x += x_max;
-    std::cout << v_x << "\n";
-  
-    double v_y = -V(idx, 1);
-    std::cout << v_y << " ";
-    if(v_y < 0)
-      v_y += y_max;
-    std::cout << v_y << "\n";
+    double v_x = std::abs(V(idx, 0));  
+    double v_y = y_max - std::abs(V(idx, 1));
 
     int px_j = static_cast<int>(std::floor(v_x * mm_to_px));
     int px_i = static_cast<int>(std::floor(v_y * mm_to_px));
-    std::cout << px_i << " " << px_j << "\n";
 
     // compute barycentric coordinates
     double alpha = px_i + px_j + 1 - (v_x + v_y) * mm_to_px;
