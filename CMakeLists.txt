@@ -12,7 +12,7 @@ FetchContent_Declare(Eigen EXCLUDE_FROM_ALL
 )
 FetchContent_Declare(nanobind
 	GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-	GIT_TAG 8d7f1ee0621c17fa370b704b2100ffa0243d5bfb
+	GIT_TAG 116e098cfa96effca2a54e32e0ce5b93abe25393
 	SOURCE_DIR "${ROOT_FOLDER}/deps/nanobind-src"
 )
 FetchContent_Declare(fabsim
@@ -39,14 +39,13 @@ FetchContent_MakeAvailable(eigen nanobind fabsim optim TinyAD libigl)
 igl_include(restricted triangle)
 
 nanobind_add_module(fabsim_py
-	PillarModel.cpp
 	FiberStress.cpp
 	FiberElement.cpp
 	ActinBundle.cpp
-	Model.cpp
 	newton.cpp
 	distance.cpp
-	main.cpp)
+	main.cpp
+	NeoHookeanMURI.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core igl_restricted::triangle)
 
 set_target_properties(fabsim_py PROPERTIES
