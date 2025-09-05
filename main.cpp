@@ -18,16 +18,31 @@
 #include <iostream>
 #include <numbers>
 
-#include "PillarModel.h"
 #include "FiberStress.h"
 #include "ActinBundle.h"
 #include "newton.h"
-#include "Model.h"
 #include "distance.h"
+#include "NeoHookeanMURI.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 using namespace std::numbers;
+
+
+Eigen::VectorXd sensitivity_matrix(const Eigen::MatrixXd &V,const Eigen::MatrixXi &F, double stretch)
+{
+  NeoHookeanMURI model(V, F, 1, 1, 0.49, 1, 0);
+  LLTSolver solver;
+  Eigen::SparseMatrix<double> H = model.hessian(V.reshaped<Eigen::RowMajor>());
+
+  solver.compute(H);
+  if(solver.info() != Eigen::Success)
+  {
+    std::cout << "Factorization failed.\n";
+  }
+  return -solver.solve(model.gradient_derivative_sensitivity(V.reshaped<Eigen::RowMajor>(), stretch));
+}
+
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
                                                                         const Eigen::MatrixXd &P,
@@ -145,9 +160,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   double pillar_modulus = 100;
   double mass = 0;
 
-  fsim::CompositeModel model(
-      fsim::NeoHookeanMembrane(P / stretch_factor, F, thickness, young_modulus, poisson_ratio, mass),
-      ActinBundle(P / stretch_factor, F, Phi, thickness, sigma_max, e0, e1));
+  NeoHookeanMURI model(P, F, thickness, young_modulus, poisson_ratio, stretch_factor, mass);
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -499,21 +512,5 @@ NB_MODULE(fabsim_py, m)
   m.def("distance", &distance);
   m.def("distance_gradient", &distanceGrad);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
-  nb::class_<Model>(m, "Model")
-      .def(nb::init<const nb::DRef<Eigen::MatrixXd> &,
-                    const nb::DRef<Eigen::MatrixXi> &,
-                    const nb::DRef<Eigen::MatrixXd> &,
-                    const std::vector<int> &,
-                    double,
-                    double,
-                    double,
-                    double,
-                    double,
-                    double,
-                    double,
-                    double>())
-      .def("force", &Model::force)
-      .def("residual", &Model::residual)
-      .def("acceleration", &Model::acceleration)
-      .def("solve_timestep_newmark", &Model::solve_timestep_newmark);
+  m.def("sensitivity_matrix", &sensitivity_matrix);
 }

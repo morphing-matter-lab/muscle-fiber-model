@@ -222,7 +222,12 @@ void newton(Eigen::VectorXd& x,
 
 
 // Eigen::MatrixXd
-// sparse_gauss_newton(const Eigen::MatrixXd& targetV,
+// sparse_gauss_newton(const Eigen::MatrixXd &V, 
+//                     const Eigen::MatrixXd &P, 
+//                     const std::vector<int> &boundaryIndices, 
+//                     const Eigen::MatrixXd &distanceMap,
+//                     const Eigen::MatrixXd &distanceResidualX,
+//                     const Eigen::MatrixXd &distanceResidualY,
 //                     const TinyAD::ScalarFunction<1, double, Eigen::Index>& adjointFunc,
 //                     const std::vector<int>& fixedIdx,
 //                     int max_iters,
@@ -230,23 +235,24 @@ void newton(Eigen::VectorXd& x,
 //                     const std::function<void(const Eigen::VectorXd&)>& callback)
 // {
 
-
-//   Eigen::VectorXd theta = theta2.toVector();
-//   Eigen::VectorXd xTarget(targetV.size());
-//   for(int i = 0; i < targetV.rows(); ++i)
-//     for(int j = 0; j < 3; ++j)
-//       xTarget(3 * i + j) = targetV(i, j);
-//   Eigen::VectorXd x = xTarget;
-
 //   LLTSolver adjointSolver;
 
-//   // auto distance = [&](const Eigen::VectorXd& th) {
-//   //   theta2.fromVector(th);
-//   //   auto simFunc = simulationFunction(mesh, MrInv, theta1, theta2, E1, lambda1, lambda2, deltaLambda, thickness);
-//   //   newton(x, simFunc, adjointSolver, 1000, lim, false, fixedIdx);
+//   auto distance = [&](double stretch_factor) {
+//     fsim::NeoHookeanMembrane model(P / stretch_factor, F, 1, 1, 0.49, 0);
 
-//   //   return (x - xTarget).dot(masses.cwiseProduct(x - xTarget)) + wM * th.dot(M_theta * th) + wL * th.dot(L * th);
-//   // };
+//     // declare NewtonSolver object
+//     optim::NewtonSolver<double> solver;
+//     // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+//     solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+//     solver.options.fixed_dofs = fixed_idx;
+//     solver.options.display = optim::SolverDisplay::quiet;
+
+//     solver.solve(model, V.reshaped<RowMajor>());
+
+//     V = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
+
+//     return distance(V, boundaryIndices, distanceMap);
+//   };
 
 //   // Build matrix P
 //   Eigen::SparseMatrix<double> P = projectionMatrix(fixedIdx, x.size());
@@ -260,38 +266,38 @@ void newton(Eigen::VectorXd& x,
 //   // Build HGN matrix
 //   Eigen::SparseMatrix<double> HGN = buildHGN(12 * Eigen::VectorXd::Ones(nBoundary), P, Eigen::SparseMatrix<double>{}, H);
 
-//   // auto distanceGrad = [&](const Eigen::VectorXd& th) -> Eigen::VectorXd {
-//   //   Eigen::VectorXd X(targetV.size() + th.size());
-//   //   X.head(targetV.size()) = x;
-//   //   X.tail(th.size()) = th;
-//   //   H = adjointFunc.eval_hessian(X);
+//   auto distanceGrad = [&](const Eigen::VectorXd& th) -> Eigen::VectorXd {
+//     Eigen::VectorXd X(targetV.size() + th.size());
+//     X.head(targetV.size()) = x;
+//     X.tail(th.size()) = th;
+//     H = adjointFunc.eval_hessian(X);
 
-//   //   for(int j = 0; j < targetV.size(); ++j)
-//   //     H.coeffRef(j, j) += 1e-10;
+//     for(int j = 0; j < targetV.size(); ++j)
+//       H.coeffRef(j, j) += 1e-10;
 
-//   //   Eigen::SparseMatrix<double> A = (P * H.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
+//     Eigen::SparseMatrix<double> A = (P * H.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
 
-//   //   adjointSolver.factorize(A);
-//   //   if(adjointSolver.info() != Eigen::Success)
-//   //   {
-//   //     auto [f, g, A_proj] = adjointFunc.eval_with_hessian_proj(X);
-//   //     A_proj = (P * A_proj.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
+//     adjointSolver.factorize(A);
+//     if(adjointSolver.info() != Eigen::Success)
+//     {
+//       auto [f, g, A_proj] = adjointFunc.eval_with_hessian_proj(X);
+//       A_proj = (P * A_proj.block(0, 0, targetV.size(), targetV.size()) * P.transpose()).eval();
 
-//   //     A = 0.9 * A + 0.1 * A_proj;
-//   //     adjointSolver.factorize(A);
-//   //     if(adjointSolver.info() != Eigen::Success)
-//   //       adjointSolver.factorize(A_proj);
-//   //   }
+//       A = 0.9 * A + 0.1 * A_proj;
+//       adjointSolver.factorize(A);
+//       if(adjointSolver.info() != Eigen::Success)
+//         adjointSolver.factorize(A_proj);
+//     }
 
-//   //   Eigen::VectorXd b = P * masses.cwiseProduct(x - xTarget);
-//   //   Eigen::VectorXd dir = adjointSolver.solve(b);
-//   //   if(adjointSolver.info() != Eigen::Success)
-//   //     std::cout << "Solver error\n";
+//     Eigen::VectorXd b = P * masses.cwiseProduct(x - xTarget);
+//     Eigen::VectorXd dir = adjointSolver.solve(b);
+//     if(adjointSolver.info() != Eigen::Success)
+//       std::cout << "Solver error\n";
 
-//   //   dir = P.transpose() * dir;
+//     dir = P.transpose() * dir;
 
-//   //   return -2 * H.block(targetV.size(), 0, th.size(), targetV.size()) * dir + 2 * wM * M_theta * th + 2 * wL * L * th;
-//   // };
+//     return -2 * H.block(targetV.size(), 0, th.size(), targetV.size()) * dir + 2 * wM * M_theta * th + 2 * wL * L * th;
+//   };
 
 //   double energy = distance(theta);
 //   std::cout << "Initial energy: " << energy << std::endl;
