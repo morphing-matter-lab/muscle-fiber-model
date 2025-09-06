@@ -4,37 +4,37 @@
 // Created: 10/30/21
 
 #include "NeoHookeanMURI.h"
-#include "fsim/util/geometry.h"
 
 #include <cmath>
+#include <fsim/util/geometry.h>
+#include <TinyAD/Utils/HessianProjection.hh>
 
 using namespace fsim;
 
-NeoHookeanMURIElement::NeoHookeanMURIElement(const Eigen::Ref<const fsim::Mat3<double>> V, const Eigen::Vector3i &E, double thickness)
+NeoHookeanMURIElement::NeoHookeanMURIElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E)
 {
   using namespace Eigen;
 
   idx = E;
 
-  Vector3d e1 = V.row(E(0)) - V.row(E(2));
-  Vector3d e2 = V.row(E(1)) - V.row(E(2));
+  Vector2d e1 = V.row(E(0)) - V.row(E(2));
+  Vector2d e2 = V.row(E(1)) - V.row(E(2));
 
-  _R.col(0) << e1.squaredNorm(), 0;
-  _R.col(1) << e2.dot(e1), e2.cross(e1).norm();
-  _R /= e1.norm();
+  _R.col(0) << e1;
+  _R.col(1) << e2;
   _R = _R.inverse().eval();
 
-  coeff = thickness / 2 * e1.cross(e2).norm();
+  coeff = 0.5 * (e1(0) * e2(1) - e2(0) * e1(1));
 }
 
-Eigen::Matrix<double, 3, 2> NeoHookeanMURIElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
+Eigen::Matrix2d NeoHookeanMURIElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> Ds;
-  Ds.col(0) = X.segment<3>(3 * idx(0)) - X.segment<3>(3 * idx(2));
-  Ds.col(1) = X.segment<3>(3 * idx(1)) - X.segment<3>(3 * idx(2));
-  Matrix<double, 3, 2> F = stretch * Ds * _R;
+  Matrix2d Ds;
+  Ds.col(0) = X.segment<2>(2 * idx(0)) - X.segment<2>(2 * idx(2));
+  Ds.col(1) = X.segment<2>(2 * idx(1)) - X.segment<2>(2 * idx(2));
+  Matrix2d F = stretch * Ds * _R;
 
   return F;
 }
@@ -43,7 +43,7 @@ Eigen::Matrix2d NeoHookeanMURIElement::stress(const Eigen::Ref<const Eigen::Vect
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> F = deformationGradient(X, stretch);
+  Matrix2d F = deformationGradient(X, stretch);
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
@@ -74,90 +74,88 @@ Eigen::Matrix3d NeoHookeanMURIElement::elasticityTensor(const Eigen::Matrix2d &C
   return _C;
 }
 
-double NeoHookeanMURIElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch, double mass) const
+double NeoHookeanMURIElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch) const
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> F = deformationGradient(X, stretch);
+  Matrix2d F = deformationGradient(X, stretch);
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
-  return coeff * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) +
-                  9.8 * mass * (X(3 * idx(0) + 2) + X(3 * idx(1) + 2) + X(3 * idx(2) + 2)) / 3);
+  return coeff * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2));
 }
 
-fsim::Vec<double, 9>
-NeoHookeanMURIElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch, double mass) const
+fsim::Vec<double, 6>
+NeoHookeanMURIElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch) const
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> F = deformationGradient(X, stretch);
+  Matrix2d F = deformationGradient(X, stretch);
   Matrix2d Cinv = (F.transpose() * F).inverse();
   Matrix2d S = stress(Cinv, lambda, mu);
 
-  Matrix<double, 3, 2> H = stretch * coeff * F * (S * _R.transpose());
+  Matrix2d H = stretch * coeff * F * S * _R.transpose();
 
-  Vec<double, 9> grad;
-  grad.segment<3>(0) = H.col(0);
-  grad.segment<3>(3) = H.col(1);
-  grad.segment<3>(6) = -H.col(0) - H.col(1);
-
-  grad(2) += 9.8 * coeff / 3 * mass;
-  grad(5) += 9.8 * coeff / 3 * mass;
-  grad(8) += 9.8 * coeff / 3 * mass;
+  Vec<double, 6> grad;
+  grad.segment<2>(0) = H.col(0);
+  grad.segment<2>(2) = H.col(1);
+  grad.segment<2>(4) = -H.col(0) - H.col(1);
 
   return grad;
 }
 
-fsim::Vec<double, 9>
+fsim::Vec<double, 6>
 NeoHookeanMURIElement::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch) const
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> F = deformationGradient(X, stretch);
+  Matrix2d F = deformationGradient(X, stretch);
   Matrix2d Cinv = (F.transpose() * F).inverse();
   Matrix2d S = stress(Cinv, lambda, mu);
 
-  Matrix<double, 3, 2> H = -coeff * (2 * mu * F + 3 * lambda / stretch * F * Cinv) * _R.transpose();
+  Matrix2d H = coeff * (2 * mu * F + 3 * lambda / stretch * F * Cinv) * _R.transpose();
 
-  fsim::Vec<double, 9> res;
-  res.segment<3>(0) = H.col(0);
-  res.segment<3>(3) = H.col(1);
-  res.segment<3>(6) = -H.col(0) - H.col(1);
+  fsim::Vec<double, 6> res;
+  res.segment<2>(0) = H.col(0);
+  res.segment<2>(2) = H.col(1);
+  res.segment<2>(4) = -H.col(0) - H.col(1);
 
   return res;
 }
 
-fsim::Mat<double, 9, 9>
+fsim::Mat<double, 6, 6>
 NeoHookeanMURIElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, double mu, double stretch) const
 {
   using namespace Eigen;
 
-  Matrix<double, 3, 2> F = deformationGradient(X, stretch);
+  Matrix2d F = deformationGradient(X, stretch);
 
   Matrix2d Cinv = (F.transpose() * F).inverse();
   Matrix2d S = stress(Cinv, lambda, mu);
   Matrix3d _C = elasticityTensor(Cinv, lambda, mu);
 
-  Matrix3d A = _C(0, 0) * F.col(0) * F.col(0).transpose() + S(0, 0) * Matrix3d::Identity() +
+  Matrix2d A = _C(0, 0) * F.col(0) * F.col(0).transpose() + S(0, 0) * Matrix2d::Identity() +
                _C(2, 2) * F.col(1) * F.col(1).transpose() + 2 * _C(0, 2) * sym(F.col(0) * F.col(1).transpose());
-  Matrix3d B = _C(1, 1) * F.col(1) * F.col(1).transpose() + S(1, 1) * Matrix3d::Identity() +
+  Matrix2d B = _C(1, 1) * F.col(1) * F.col(1).transpose() + S(1, 1) * Matrix2d::Identity() +
                _C(2, 2) * F.col(0) * F.col(0).transpose() + 2 * _C(1, 2) * sym(F.col(0) * F.col(1).transpose());
-  Matrix3d C = _C(0, 1) * F.col(0) * F.col(1).transpose() + S(0, 1) * Matrix3d::Identity() +
+  Matrix2d C = _C(0, 1) * F.col(0) * F.col(1).transpose() + S(0, 1) * Matrix2d::Identity() +
                _C(2, 2) * F.col(1) * F.col(0).transpose() + _C(0, 2) * F.col(0) * F.col(0).transpose() +
                _C(1, 2) * F.col(1) * F.col(1).transpose();
 
-  Matrix<double, 9, 9> hess;
+  Matrix<double, 6, 6> hess;
 
   for(int i = 0; i < 2; ++i)
     for(int j = i; j < 2; ++j)
-      hess.block<3, 3>(3 * i, 3 * j) =
+      hess.block<2, 2>(2 * i, 2 * j) =
           _R(i, 0) * _R(j, 0) * A + _R(i, 1) * _R(j, 1) * B + _R(i, 0) * _R(j, 1) * C + _R(i, 1) * _R(j, 0) * C.transpose();
 
-  hess.block<3, 3>(3, 0) = hess.block<3, 3>(0, 3).transpose();
-  hess.block<6, 3>(0, 6) = -hess.block<6, 3>(0, 0) - hess.block<6, 3>(0, 3);
-  hess.block<3, 6>(6, 0) = hess.block<6, 3>(0, 6).transpose();
-  hess.block<3, 3>(6, 6) = -hess.block<3, 3>(0, 6) - hess.block<3, 3>(3, 6);
+  hess.block<2, 2>(2, 0) = hess.block<2, 2>(0, 2).transpose();
+  hess.block<4, 2>(0, 4) = -hess.block<4, 2>(0, 0) - hess.block<4, 2>(0, 2);
+  hess.block<2, 4>(4, 0) = hess.block<4, 2>(0, 4).transpose();
+  hess.block<2, 2>(4, 4) = -hess.block<2, 2>(0, 4) - hess.block<2, 2>(2, 4);
+
+  TinyAD::project_positive_definite<6, double>(hess, 1e-9);
+
   return coeff * stretch * stretch * hess;
 }
 

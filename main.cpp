@@ -5,6 +5,7 @@
 #include <nanobind/stl/string.h>
 
 #include <optim/NewtonSolver.h>
+#include <optim/filter_var.h>
 #include <fsim/CompositeModel.h>
 #include <fsim/ElasticMembrane.h>
 
@@ -28,21 +29,28 @@ namespace nb = nanobind;
 using namespace nb::literals;
 using namespace std::numbers;
 
-
-Eigen::VectorXd sensitivity_matrix(const Eigen::MatrixXd &V,const Eigen::MatrixXi &F, double stretch)
+Eigen::VectorXd sensitivity_matrix(const Eigen::MatrixXd &V, 
+                                   const Eigen::MatrixXi &F,
+                                   const std::vector<int> &fixed_idx,
+                                   double stretch,
+                                   double poisson_ratio)
 {
-  NeoHookeanMURI model(V, F, 1, 1, 0.49, 1, 0);
+  const double young_modulus = 1;
+  NeoHookeanMURI model(V, F, young_modulus, poisson_ratio, stretch);
   LLTSolver solver;
   Eigen::SparseMatrix<double> H = model.hessian(V.reshaped<Eigen::RowMajor>());
+  filter_var(H, fixed_idx);
 
   solver.compute(H);
-  if(solver.info() != Eigen::Success)
+  if (solver.info() != Eigen::Success)
   {
     std::cout << "Factorization failed.\n";
   }
-  return -solver.solve(model.gradient_derivative_sensitivity(V.reshaped<Eigen::RowMajor>(), stretch));
-}
 
+  Eigen::VectorXd gradient = model.gradient_derivative_sensitivity(V.reshaped<Eigen::RowMajor>(), stretch);
+  filter_var(gradient, fixed_idx);
+  return -solver.solve(gradient);
+}
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
                                                                         const Eigen::MatrixXd &P,
@@ -147,31 +155,25 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
-                       double poisson_ratio,
-                       double sigma_max,
-                       double e0,
-                       double e1)
+                       double poisson_ratio)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
-  double thickness = 1;
   double young_modulus = 1;
-  double pillar_modulus = 100;
-  double mass = 0;
 
-  NeoHookeanMURI model(P, F, thickness, young_modulus, poisson_ratio, stretch_factor, mass);
+  NeoHookeanMURI model(P, F, young_modulus, poisson_ratio, stretch_factor);
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
   solver.options.fixed_dofs = fixed_idx;
-  solver.options.display = optim::SolverDisplay::quiet;
+  // solver.options.display = optim::SolverDisplay::quiet;
 
   solver.solve(model, V.reshaped<RowMajor>());
 
-  V = Map<fsim::Mat3<double>>(solver.var().data(), V.rows(), 3);
+  V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
 }
 
 void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
@@ -402,8 +404,8 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
     count(F(i, 2)) += k;
   }
 
-  for(int i = 0; i < V.rows(); ++i)
-    if(count(i) > 0)
+  for (int i = 0; i < V.rows(); ++i)
+    if (count(i) > 0)
       res(i) = res(i) / count(i);
 
   return res;
