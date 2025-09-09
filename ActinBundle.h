@@ -42,6 +42,7 @@ public:
    * @param Y  gradient (or sum of gradients) vector in which we will add the gradient of energy evaluated at X
    * @return Y
    */
+  void gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref<Eigen::VectorXd> Y) const;
   Eigen::VectorXd gradient(const Eigen::Ref<const Eigen::VectorXd> X) const;
   Eigen::VectorXd gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X) const;
 

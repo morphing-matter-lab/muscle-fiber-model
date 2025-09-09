@@ -107,24 +107,24 @@ public:
    * @param Y  gradient (or sum of gradients) vector in which we will add the gradient of energy evaluated at X
    * @return Y
    */
-  Eigen::VectorXd gradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
+  Eigen::VectorXd gradient(const Eigen::Ref<const Eigen::VectorXd> X) const
   {
     using namespace Eigen;
 
     VectorXd Y = VectorXd::Zero(X.size());
+    gradient(X, Y);
+    return Y;
+  }
+
+  void gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref<Eigen::VectorXd> Y) const
+  {
     for(auto &element: _elements)
     {
-      auto grad = element.gradient(X, _lambda, _mu, stretch);
+      auto grad = element.gradient(X, _lambda, _mu, _stretch);
 
       for(int j = 0; j < 3; ++j)
         Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
     }
-    return Y;
-  }
-
-  Eigen::VectorXd gradient(const Eigen::Ref<const Eigen::VectorXd> X) const
-  {
-    return gradient(X, _stretch);
   }
 
   Eigen::VectorXd gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const

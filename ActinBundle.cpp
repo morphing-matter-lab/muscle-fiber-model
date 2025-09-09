@@ -36,6 +36,12 @@ Eigen::VectorXd ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X)
   using namespace Eigen;
 
   VectorXd Y = VectorXd::Zero(X.size());
+  gradient(X, Y);
+  return Y;
+}
+
+void ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref<Eigen::VectorXd> Y) const
+{
   for(auto &element: _elements)
   {
     auto grad = element.gradient(X, sigma);
@@ -43,7 +49,6 @@ Eigen::VectorXd ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X)
     for(int j = 0; j < 3; ++j)
       Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
   }
-  return Y;
 }
 
 Eigen::VectorXd ActinBundle::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X) const

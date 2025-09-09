@@ -155,21 +155,24 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
-                       double poisson_ratio)
+                       double poisson_ratio,
+                      double sigma_max)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
   double young_modulus = 1;
 
-  NeoHookeanMURI model(P, F, young_modulus, poisson_ratio, stretch_factor);
+  fsim::CompositeModel model(
+      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
+      ActinBundle(P, F, Phi, sigma_max));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
   solver.options.fixed_dofs = fixed_idx;
-  // solver.options.display = optim::SolverDisplay::quiet;
+  solver.options.display = optim::SolverDisplay::quiet;
 
   solver.solve(model, V.reshaped<RowMajor>());
 
