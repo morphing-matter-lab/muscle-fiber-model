@@ -12,7 +12,7 @@
 /**
  * template class for isotropic membrane models (e.g. StVK, neohookean...)
  */
-class ActinBundle
+class ActinBundle : public fsim::ModelBase<FiberElement>
 {
 public:
   /**
@@ -24,10 +24,13 @@ public:
    * @param e0
    * @param e1
    */
-  ActinBundle(const Eigen::Ref<const fsim::Mat2<double>> V,
+  ActinBundle(const Eigen::Ref<const fsim::Mat3<double>> V,
               const Eigen::Ref<const fsim::Mat3<int>> F,
               const Eigen::Ref<const Eigen::MatrixXd> Phi,
-              double sigma_max);
+              double thickness,
+              double sigma_max,
+              double e0,
+              double e1);
 
   /**
    * energy function of this material model   f : \R^n -> \R
@@ -42,8 +45,8 @@ public:
    * @param Y  gradient (or sum of gradients) vector in which we will add the gradient of energy evaluated at X
    * @return Y
    */
+  void gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref<Eigen::VectorXd> Y) const;
   Eigen::VectorXd gradient(const Eigen::Ref<const Eigen::VectorXd> X) const;
-  Eigen::VectorXd gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X) const;
 
   /**
    * hessian of the energy  \nabla^2 f : \R^n -> \R^{n \times n}
@@ -64,6 +67,6 @@ public:
 
 private:
   int nV, nF;
-  double sigma;
-  std::vector<FiberElement> _elements;
+  double e0;
+  double e1;
 };
