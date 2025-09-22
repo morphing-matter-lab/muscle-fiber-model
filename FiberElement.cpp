@@ -38,7 +38,7 @@ Eigen::Matrix2d FiberElement::deformationGradient(const Eigen::Ref<const Eigen::
   return F;
 }
 
-Eigen::Matrix2d FiberElement::stress() const
+Eigen::Matrix2d FiberElement::stress(double sigma) const
 {
   using namespace Eigen;
   using namespace std::numbers;
@@ -51,7 +51,7 @@ Eigen::Matrix2d FiberElement::stress() const
     res += phi(i) * u * u.transpose();
   }
 
-  return res / n;
+  return sigma * res / n;
 }
 
 double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) const
@@ -79,16 +79,16 @@ FiberElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) 
   using namespace Eigen;
 
   Matrix2d F = deformationGradient(X);
-  Matrix2d S = stress();
+  Matrix2d S = stress(sigma);
 
-  Matrix2d H = coeff * F * (S * R.transpose());
+  Matrix2d H = coeff * F * S * R.transpose();
 
   fsim::Vec<double, 6> grad;
   grad.segment<2>(0) = H.col(0);
   grad.segment<2>(2) = H.col(1);
   grad.segment<2>(4) = -H.col(0) - H.col(1);
 
-  return sigma * grad;
+  return grad;
 }
 
 fsim::Vec<double, 6>
@@ -97,9 +97,9 @@ FiberElement::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::Vect
   using namespace Eigen;
 
   Matrix2d F = deformationGradient(X);
-  Matrix2d S = stress();
+  Matrix2d S = stress(1);
 
-  Matrix2d H = coeff * F * (S * R.transpose());
+  Matrix2d H = coeff * F * S * R.transpose();
 
   fsim::Vec<double, 6> grad;
   grad.segment<2>(0) = H.col(0);
@@ -114,7 +114,7 @@ FiberElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) c
 {
   using namespace Eigen;
 
-  Matrix2d S = stress();
+  Matrix2d S = stress(sigma);
 
   Matrix<double, 6, 6> hess;
 
@@ -127,5 +127,5 @@ FiberElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) c
   hess.block<4, 2>(0, 4) = -hess.block<4, 2>(0, 0) - hess.block<4, 2>(0, 2);
   hess.block<2, 4>(4, 0) = hess.block<4, 2>(0, 4).transpose();
   hess.block<2, 2>(4, 4) = -hess.block<2, 2>(0, 4) - hess.block<2, 2>(2, 4);
-  return coeff * sigma * hess;
+  return coeff * hess;
 }

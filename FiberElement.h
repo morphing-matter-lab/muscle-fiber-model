@@ -50,7 +50,7 @@ public:
    * @param V  n by 3 list of vertex positions (each row is a vertex)
    * @return second Piola-Kirchhoff stress
    */
-  Eigen::Matrix2d stress() const;
+  Eigen::Matrix2d stress(double sigma) const;
 
   int n;
   double coeff;
