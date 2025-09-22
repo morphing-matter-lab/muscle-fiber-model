@@ -44,10 +44,10 @@ void ActinBundle::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eigen::Ref
 {
   for(auto &element: _elements)
   {
-    auto grad = element.gradient(X, sigma);
+    fsim::Vec<double, 6> grad = element.gradient(X, sigma);
 
     for(int j = 0; j < 3; ++j)
-      Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
+      Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
   }
 }
 
@@ -57,10 +57,10 @@ Eigen::VectorXd ActinBundle::gradient_derivative_sensitivity(const Eigen::Ref<co
   VectorXd Y = VectorXd::Zero(X.size());
   for(auto &element: _elements)
   {
-    auto grad = element.gradient_derivative_sensitivity(X);
+    fsim::Vec<double, 6> grad = element.gradient_derivative_sensitivity(X);
 
     for(int j = 0; j < 3; ++j)
-      Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
+      Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
   }
   return Y;
 }

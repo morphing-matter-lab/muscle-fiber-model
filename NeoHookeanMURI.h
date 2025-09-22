@@ -120,10 +120,10 @@ public:
   {
     for(auto &element: _elements)
     {
-      auto grad = element.gradient(X, _lambda, _mu, _stretch);
+      fsim::Vec<double, 6> grad = element.gradient(X, _lambda, _mu, _stretch);
 
       for(int j = 0; j < 3; ++j)
-        Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
+        Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
     }
   }
 
@@ -133,10 +133,10 @@ public:
     VectorXd Y = VectorXd::Zero(X.size());
     for(auto &element: _elements)
     {
-      auto grad = element.gradient_derivative_sensitivity(X, _lambda, _mu, stretch);
+      fsim::Vec<double, 6> grad = element.gradient_derivative_sensitivity(X, _lambda, _mu, stretch);
 
       for(int j = 0; j < 3; ++j)
-        Y.segment<2>(2 * element.idx(j)) += grad.template segment<2>(2 * j);
+        Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
     }
     return Y;
   }
