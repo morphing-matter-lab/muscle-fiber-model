@@ -8,6 +8,7 @@
 #include <optim/filter_var.h>
 #include <fsim/CompositeModel.h>
 #include <fsim/ElasticMembrane.h>
+#include <fsim/util/finite_differences.h>
 
 #include "TinyAD/Utils/Helpers.hh"
 #include "TinyAD/ScalarFunction.hh"
@@ -29,27 +30,39 @@ namespace nb = nanobind;
 using namespace nb::literals;
 using namespace std::numbers;
 
-Eigen::VectorXd sensitivity_matrix(const Eigen::MatrixXd &V, 
-                                   const Eigen::MatrixXi &F,
-                                   const std::vector<int> &fixed_idx,
-                                   double stretch,
-                                   double poisson_ratio)
+Eigen::MatrixXd sensitivity_matrix(nb::DRef<Eigen::MatrixXd> V,
+                                  const nb::DRef<Eigen::MatrixXd> &P,
+                                  const nb::DRef<Eigen::MatrixXi> &F,
+                                  const nb::DRef<Eigen::MatrixXd> &Phi,
+                                  const std::vector<int> &fixed_idx,
+                                  double stretch,
+                                  double poisson_ratio,
+                                  double sigma_max)
 {
+  using namespace Eigen;
+
   const double young_modulus = 1;
-  NeoHookeanMURI model(V, F, young_modulus, poisson_ratio, stretch);
+  fsim::CompositeModel model(
+      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
+      ActinBundle(P / stretch, F, Phi, sigma_max));
   LLTSolver solver;
-  Eigen::SparseMatrix<double> H = model.hessian(V.reshaped<Eigen::RowMajor>());
+  SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
   filter_var(H, fixed_idx);
 
   solver.compute(H);
-  if (solver.info() != Eigen::Success)
-  {
+  if (solver.info() != Success)
     std::cout << "Factorization failed.\n";
-  }
 
-  Eigen::VectorXd gradient = model.gradient_derivative_sensitivity(V.reshaped<Eigen::RowMajor>(), stretch);
-  filter_var(gradient, fixed_idx);
-  return -solver.solve(gradient);
+  VectorXd gradient_stretch = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
+  VectorXd gradient_sigma = model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
+  filter_var(gradient_stretch, fixed_idx);
+  filter_var(gradient_sigma, fixed_idx);
+
+  MatrixXd res(V.size(), 2);
+  res.col(0) = -solver.solve(gradient_stretch);
+  res.col(1) = -solver.solve(gradient_sigma);
+
+  return res;
 }
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
@@ -156,7 +169,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
                        double poisson_ratio,
-                      double sigma_max)
+                       double sigma_max)
 {
   using namespace Eigen;
 
@@ -165,7 +178,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 
   fsim::CompositeModel model(
       NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
-      ActinBundle(P, F, Phi, sigma_max));
+      ActinBundle(V, F, Phi, sigma_max));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -177,6 +190,33 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   solver.solve(model, V.reshaped<RowMajor>());
 
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+}
+
+Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::MatrixXd> &Phi,
+                       double sigma_max)
+{
+  using namespace Eigen;
+
+  ActinBundle model(P, F, Phi, sigma_max);
+
+  return model.gradient(V.reshaped<RowMajor>());
+}
+
+
+Eigen::VectorXd fiber_finite_differences(nb::DRef<Eigen::MatrixXd> V,
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::MatrixXd> &Phi,
+                       double sigma_max)
+{
+  using namespace Eigen;
+
+  ActinBundle model(P, F, Phi, sigma_max);
+
+  return fsim::finite_differences([&](const VectorXd &X) { return model.energy(X); }, V.reshaped<RowMajor>());
 }
 
 void simulate3D(nb::DRef<Eigen::MatrixXd> NV,
@@ -295,6 +335,7 @@ Eigen::MatrixXd transfer_data_to_3D_mesh(const nb::DRef<Eigen::MatrixXd> &V,
 Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
                                        const nb::DRef<Eigen::MatrixXi> &F,
                                        const nb::DRef<Eigen::MatrixXd> &image,
+                                       const nb::DRef<Eigen::MatrixXd> &alpha,
                                        double world_coords_to_px,
                                        double radius,
                                        int n)
@@ -310,6 +351,7 @@ Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   //  lower normal part of gaussian
   const double normal = 1 / std::sqrt(2 * pi) / sigma;
 
+  #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
   for (int i = 0; i < V.rows(); ++i)
   {
     double minX = V(i, 0) - radius;
@@ -334,7 +376,7 @@ Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
         {
           int k = int(std::round(image(y, x) * n / pi + n / 2)) % n; // rotate the data with + n / 2
           double dist = (V.block<1, 2>(i, 0) - coords.transpose()).norm();
-          Phi(i, k) += std::exp(-std::pow(dist / radius, 2) / 2 / std::pow(sigma, 2)) * normal;
+          Phi(i, k) += std::exp(-std::pow(dist / radius, 2) / 2 / std::pow(sigma, 2)) * normal * alpha(y, x);
         }
       }
     }
@@ -343,19 +385,19 @@ Eigen::MatrixXd histogram_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
   return Phi;
 }
 
-Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
+Eigen::VectorXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
                                    const nb::DRef<Eigen::MatrixXi> &F,
                                    const nb::DRef<Eigen::MatrixXd> &image,
                                    double world_coords_to_px)
 {
   using namespace Eigen;
 
-  VectorXd res = VectorXd::Zero(V.rows());
-  VectorXd count = VectorXd::Zero(V.rows());
+  VectorXd res = VectorXd::Zero(F.rows());
 
   int nX = image.cols();
   int nY = image.rows();
 
+#pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
   for (int i = 0; i < F.rows(); ++i)
   {
     double minX = V(F(i, 0), 0);
@@ -380,8 +422,6 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
     int maxIdxX = std::clamp(int(std::ceil(world_coords_to_px * maxX + nX / 2)), 0, nX);
     int maxIdxY = std::clamp(int(std::ceil(-world_coords_to_px * minY + nY / 2)), 0, nY);
 
-    int k = 0;
-
     for (int x = minIdxX; x < maxIdxX; ++x)
     {
       for (int y = minIdxY; y < maxIdxY; ++y)
@@ -391,25 +431,13 @@ Eigen::MatrixXd image_data_to_mesh(const nb::DRef<Eigen::MatrixXd> &V,
         coords /= world_coords_to_px;
 
         if (is_point_in_triangle(coords, F.row(i), V))
-        {
           if (image(y, x) != 0)
-          {
-            res(F(i, 0)) += image(y, x);
-            res(F(i, 1)) += image(y, x);
-            res(F(i, 2)) += image(y, x);
-            k += 1;
-          }
-        }
+            res(i) += image(y, x);
       }
     }
-    count(F(i, 0)) += k;
-    count(F(i, 1)) += k;
-    count(F(i, 2)) += k;
+    res(i) /= (V(F(i,1), 0) - V(F(i,0), 0)) *  (V(F(i,2), 1) - V(F(i,0), 1)) - 
+      (V(F(i,1), 1) - V(F(i,0), 1)) * (V(F(i,2), 0) - V(F(i,0), 0));
   }
-
-  for (int i = 0; i < V.rows(); ++i)
-    if (count(i) > 0)
-      res(i) = res(i) / count(i);
 
   return res;
 }
@@ -518,4 +546,6 @@ NB_MODULE(fabsim_py, m)
   m.def("distance_gradient", &distanceGrad);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   m.def("sensitivity_matrix", &sensitivity_matrix);
+  m.def("fiber_gradient", &fiber_gradient);
+  m.def("fiber_finite_differences", &fiber_finite_differences);
 }
