@@ -178,7 +178,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 
   fsim::CompositeModel model(
       NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
-      ActinBundle(V, F, Phi, sigma_max));
+      ActinBundle(P / stretch_factor, F, Phi, sigma_max));
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
