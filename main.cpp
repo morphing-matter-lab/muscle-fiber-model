@@ -54,7 +54,9 @@ Eigen::VectorXd sensitivity_gradient(nb::DRef<Eigen::MatrixXd> V,
   if (solver.info() != Success)
     std::cout << "Factorization failed.\n";
 
-  VectorXd res = -solver.solve(distance_grad);
+  VectorXd distance_grad_cp(distance_grad);
+  filter_var(distance_grad_cp, fixed_idx);
+  VectorXd res = -solver.solve(distance_grad_cp);
 
   VectorXd gradient_stretch = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
   VectorXd gradient_sigma = model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
@@ -62,6 +64,52 @@ Eigen::VectorXd sensitivity_gradient(nb::DRef<Eigen::MatrixXd> V,
   filter_var(gradient_sigma, fixed_idx);
 
   return Vector2d(res.dot(gradient_stretch), res.dot(gradient_sigma));
+}
+
+Eigen::MatrixXd sensitivity_gradient_test1(nb::DRef<Eigen::MatrixXd> V,
+                                  const nb::DRef<Eigen::MatrixXd> &P,
+                                  const nb::DRef<Eigen::MatrixXi> &F,
+                                  const nb::DRef<Eigen::MatrixXd> &Phi,
+                                  const std::vector<int> &fixed_idx,
+                                  double stretch,
+                                  double poisson_ratio,
+                                  double sigma_max)
+{
+  using namespace Eigen;
+
+  const double young_modulus = 1;
+  fsim::CompositeModel model(
+      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
+      ActinBundle(P / stretch, F, Phi, sigma_max));
+
+  SparseMatrix<double> H = fsim::finite_differences_sparse([&](const VectorXd &X) { return model.gradient(X); }, V.reshaped<RowMajor>());
+  filter_var(H, fixed_idx);
+
+  return MatrixXd(H);
+}
+
+
+
+Eigen::MatrixXd sensitivity_gradient_test2(nb::DRef<Eigen::MatrixXd> V,
+                                  const nb::DRef<Eigen::MatrixXd> &P,
+                                  const nb::DRef<Eigen::MatrixXi> &F,
+                                  const nb::DRef<Eigen::MatrixXd> &Phi,
+                                  const std::vector<int> &fixed_idx,
+                                  double stretch,
+                                  double poisson_ratio,
+                                  double sigma_max)
+{
+  using namespace Eigen;
+
+  const double young_modulus = 1;
+  fsim::CompositeModel model(
+      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
+      ActinBundle(P / stretch, F, Phi, sigma_max));
+
+  SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
+  filter_var(H, fixed_idx);
+
+  return MatrixXd(H).selfadjointView<Upper>();
 }
 
 
@@ -589,6 +637,8 @@ NB_MODULE(fabsim_py, m)
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   m.def("sensitivity_matrix", &sensitivity_matrix);
   m.def("sensitivity_gradient", &sensitivity_gradient);
+  m.def("sensitivity_gradient_test1", &sensitivity_gradient_test1);
+  m.def("sensitivity_gradient_test2", &sensitivity_gradient_test2);
   m.def("fiber_gradient", &fiber_gradient);
   m.def("fiber_finite_differences", &fiber_finite_differences);
   m.def("distance_finite_differences", &distance_finite_differences);

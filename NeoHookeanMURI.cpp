@@ -154,7 +154,7 @@ NeoHookeanMURIElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double
   hess.block<2, 4>(4, 0) = hess.block<4, 2>(0, 4).transpose();
   hess.block<2, 2>(4, 4) = -hess.block<2, 2>(0, 4) - hess.block<2, 2>(2, 4);
 
-  TinyAD::project_positive_definite<6, double>(hess, 1e-9);
+  // TinyAD::project_positive_definite<6, double>(hess, 1e-9);
 
   return coeff * stretch * stretch * hess;
 }
