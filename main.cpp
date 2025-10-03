@@ -107,7 +107,7 @@ Eigen::MatrixXd sensitivity_gradient_test2(nb::DRef<Eigen::MatrixXd> V,
       ActinBundle(P / stretch, F, Phi, sigma_max));
 
   SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
-  filter_var(H, fixed_idx);
+  // filter_var(H, fixed_idx);
 
   return MatrixXd(H).selfadjointView<Upper>();
 }
@@ -130,20 +130,21 @@ Eigen::MatrixXd sensitivity_matrix(nb::DRef<Eigen::MatrixXd> V,
       ActinBundle(P / stretch, F, Phi, sigma_max));
   LLTSolver solver;
   SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
-  filter_var(H, fixed_idx);
+
+  // Build matrix proj
+  Eigen::SparseMatrix<double> proj = projectionMatrix(fixed_idx, V.size());
+  H = (proj * H * proj.transpose()).eval();
 
   solver.compute(H);
   if (solver.info() != Success)
     std::cout << "Factorization failed.\n";
 
-  VectorXd gradient_stretch = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
-  VectorXd gradient_sigma = model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
-  filter_var(gradient_stretch, fixed_idx);
-  filter_var(gradient_sigma, fixed_idx);
+  VectorXd gradient_stretch = proj * model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
+  VectorXd gradient_sigma = proj * model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
 
   MatrixXd res(V.size(), 2);
-  res.col(0) = -solver.solve(gradient_stretch);
-  res.col(1) = -solver.solve(gradient_sigma);
+  res.col(0) = -proj.transpose() * solver.solve(gradient_stretch);
+  res.col(1) = -proj.transpose() * solver.solve(gradient_sigma);
 
   return res;
 }
@@ -273,6 +274,30 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   solver.solve(model, V.reshaped<RowMajor>());
 
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+}
+
+Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::MatrixXd> &Phi,
+                       const std::vector<int> &fixed_idx,
+                       double stretch_factor,
+                       double poisson_ratio,
+                       double sigma_max)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double young_modulus = 1;
+
+  fsim::CompositeModel model(
+      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
+      ActinBundle(P / stretch_factor, F, Phi, sigma_max));
+
+  VectorXd grad = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch_factor);
+  // filter_var(grad, fixed_idx);
+
+  return grad;
 }
 
 Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
@@ -640,6 +665,7 @@ NB_MODULE(fabsim_py, m)
   m.def("sensitivity_gradient_test1", &sensitivity_gradient_test1);
   m.def("sensitivity_gradient_test2", &sensitivity_gradient_test2);
   m.def("fiber_gradient", &fiber_gradient);
+  m.def("model_gradient", &model_gradient);
   m.def("fiber_finite_differences", &fiber_finite_differences);
   m.def("distance_finite_differences", &distance_finite_differences);
 }

@@ -16,4 +16,4 @@ void newton(
     const std::vector<int>& fixedIdx = {},
     const std::function<void(const Eigen::VectorXd&)>& callBack = [](const auto&) {});
 
-    Eigen::SparseMatrix<double> projectionMatrix(const std::vector<int>& fixedIdx, int size);
+Eigen::SparseMatrix<double> projectionMatrix(const std::vector<int>& fixedIdx, int size);
