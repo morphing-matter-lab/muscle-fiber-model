@@ -9,7 +9,6 @@
 #include "FiberElement.h"
 
 FiberElement::FiberElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, const Eigen::VectorXd &_phi)
-    : phi(_phi)
 {
   using namespace Eigen;
   using namespace std::numbers;
@@ -24,6 +23,15 @@ FiberElement::FiberElement(const Eigen::Ref<const fsim::Mat2<double>> V, const E
   R = R.inverse().eval();
 
   coeff = 0.5 * (e1(0) * e2(1) - e2(0) * e1(1));
+
+  Phi = Matrix2d::Zero();
+  const int n = _phi.size();
+  for (int i = 0; i < n; ++i)
+  {
+    Vector2d u(cos(i * pi / n), sin(i * pi / n));
+    Phi += _phi(i) * u * u.transpose();
+  }
+  Phi /= n;
 }
 
 Eigen::Matrix2d FiberElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X) const
@@ -38,48 +46,29 @@ Eigen::Matrix2d FiberElement::deformationGradient(const Eigen::Ref<const Eigen::
   return F;
 }
 
-Eigen::Matrix2d FiberElement::stress(double sigma) const
+Eigen::Matrix2d FiberElement::stress(double mu) const
 {
-  using namespace Eigen;
-  using namespace std::numbers;
-
-  Matrix2d res = Matrix2d::Zero();
-  const int n = phi.size();
-  for (int i = 0; i < n; ++i)
-  {
-    Vector2d u(cos(i * pi / n), sin(i * pi / n));
-    res += phi(i) * u * u.transpose();
-  }
-
-  return sigma * res / n;
+  return mu * Phi;
 }
 
-double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) const
+double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double mu) const
 {
   using namespace Eigen;
   using namespace std::numbers;
 
   Matrix2d F = deformationGradient(X);
+  Matrix2d E = 0.5 * (F.transpose() * F - Matrix2d::Identity());
 
-  double res = 0;
-  const int n = phi.size();
-  for (int i = 0; i < n; ++i)
-  {
-    Vector2d u(cos(i * pi / n), sin(i * pi / n));
-    double e = 0.5 * ((F * u).dot(F * u) - 1);
-    res += phi(i) * e;
-  }
-
-  return coeff * sigma * res / n;
+  return coeff * mu * (E * Phi).trace();
 }
 
 fsim::Vec<double, 6>
-FiberElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) const
+FiberElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double mu) const
 {
   using namespace Eigen;
 
   Matrix2d F = deformationGradient(X);
-  Matrix2d S = stress(sigma);
+  Matrix2d S = stress(mu);
 
   Matrix2d H = coeff * F * S * R.transpose();
 
@@ -110,11 +99,11 @@ FiberElement::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::Vect
 }
 
 fsim::Mat<double, 6, 6>
-FiberElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double sigma) const
+FiberElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double mu) const
 {
   using namespace Eigen;
 
-  Matrix2d S = stress(sigma);
+  Matrix2d S = stress(mu);
 
   Matrix<double, 6, 6> hess;
 
