@@ -49,6 +49,14 @@ Eigen::Matrix2d FiberElement::deformationGradient(const Eigen::Ref<const Eigen::
 Eigen::Matrix2d FiberElement::stress(double mu) const
 {
   return mu * Phi;
+  
+  // using namespace Eigen;
+  // Matrix2d F = deformationGradient(X);
+  // Matrix2d E = 0.5 * (F.transpose() * F - Matrix2d::Identity());
+  // return mu * 2 * ((E * Phi).trace() - 1) * Phi;
+
+  // return mu * (1 - 1 / std::sqrt((E * Phi).trace())) * Phi;
+
 }
 
 double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double mu) const
@@ -60,6 +68,8 @@ double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double mu
   Matrix2d E = 0.5 * (F.transpose() * F - Matrix2d::Identity());
 
   return coeff * mu * (E * Phi).trace();
+  // return coeff * mu / 2 * std::pow((E * Phi).trace() - 1, 2);
+  // return coeff * mu * std::pow(std::sqrt((E * Phi).trace()) - 1, 2);
 }
 
 fsim::Vec<double, 6>
