@@ -52,12 +52,22 @@ Eigen::Matrix2d FiberElement::stress(double mu) const
   
   // using namespace Eigen;
   // Matrix2d F = deformationGradient(X);
-  // Matrix2d E = 0.5 * (F.transpose() * F - Matrix2d::Identity());
-  // return mu * 2 * ((E * Phi).trace() - 1) * Phi;
+  // return mu * 2 * ((F.transpose() * F * Phi).trace() - 1) * Phi;
 
-  // return mu * (1 - 1 / std::sqrt((E * Phi).trace())) * Phi;
+  // return mu * (1 - 1 / std::sqrt((F.transpose() * F * Phi).trace())) * Phi;
 
 }
+
+// Eigen::Matrix3d FiberElement::elasticityTensor(const Eigen::Matrix2d &F, double mu) const
+// {
+//   using namespace Eigen;
+  
+//   Vector3d Phi_vec(Phi(0,0), Phi(1,1), Phi(0,1));
+//   _C = 4 * mu * Phi_vec * Phi_vec.transpose();
+  
+//   _C = mu * std::pow((F.transpose() * F * Phi).trace(), -3/2.) * Phi_vec * Phi_vec.transpose();
+//   return _C;
+// }
 
 double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double mu) const
 {
@@ -65,11 +75,10 @@ double FiberElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double mu
   using namespace std::numbers;
 
   Matrix2d F = deformationGradient(X);
-  Matrix2d E = 0.5 * (F.transpose() * F - Matrix2d::Identity());
 
-  return coeff * mu * (E * Phi).trace();
-  // return coeff * mu / 2 * std::pow((E * Phi).trace() - 1, 2);
-  // return coeff * mu * std::pow(std::sqrt((E * Phi).trace()) - 1, 2);
+  return coeff * mu / 2 * ((F.transpose() * F * Phi).trace() - 1);
+  // return coeff * mu / 2 * std::pow((F.transpose() * F * Phi).trace() - 1, 2);
+  // return coeff * mu / 2 * std::pow(std::sqrt((F.transpose() * F * Phi).trace()) - 1, 2);
 }
 
 fsim::Vec<double, 6>

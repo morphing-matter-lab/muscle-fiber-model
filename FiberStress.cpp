@@ -125,7 +125,7 @@ Eigen::MatrixXd polymer_fraction_steady_state(const Eigen::MatrixXd &stress, dou
   for (int i = 0; i < polymer_fraction.rows(); ++i)
   {
     VectorXd kf = k0 * RowVectorXd::Ones(n) + k1 * stress.row(i);
-    VectorXd b = 1 / frac_f * (1 - frac_s - frac_f) * kf.transpose();
+    VectorXd b = (1 - frac_s - frac_f) / frac_f * kf;
     MatrixXd M = kd * MatrixXd::Identity(n, n) + 1 / frac_f / n * kf * RowVectorXd::Ones(n);
     polymer_fraction.row(i) = M.colPivHouseholderQr().solve(b);
   }
