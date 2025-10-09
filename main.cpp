@@ -63,7 +63,7 @@ using namespace std::numbers;
 //   return Vector2d(res.dot(gradient_stretch), res.dot(gradient_sigma));
 // }
 
-Eigen::MatrixXd sensitivity_gradient_test1(nb::DRef<Eigen::MatrixXd> V,
+Eigen::MatrixXd model_hessian_finite_differences(nb::DRef<Eigen::MatrixXd> V,
                                   const nb::DRef<Eigen::MatrixXd> &P,
                                   const nb::DRef<Eigen::MatrixXi> &F,
                                   const nb::DRef<Eigen::MatrixXd> &Phi,
@@ -84,8 +84,7 @@ Eigen::MatrixXd sensitivity_gradient_test1(nb::DRef<Eigen::MatrixXd> V,
 }
 
 
-
-Eigen::MatrixXd sensitivity_gradient_test2(nb::DRef<Eigen::MatrixXd> V,
+Eigen::MatrixXd model_hessian(nb::DRef<Eigen::MatrixXd> V,
                                   const nb::DRef<Eigen::MatrixXd> &P,
                                   const nb::DRef<Eigen::MatrixXi> &F,
                                   const nb::DRef<Eigen::MatrixXd> &Phi,
@@ -287,7 +286,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 //   return grad;
 // }
 
-Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
+Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
@@ -304,8 +303,7 @@ Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
   return model.gradient(V.reshaped<RowMajor>());
 }
 
-
-Eigen::VectorXd fiber_finite_differences(nb::DRef<Eigen::MatrixXd> V,
+Eigen::VectorXd model_gradient_finite_differences(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
@@ -657,10 +655,10 @@ NB_MODULE(fabsim_py, m)
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
   // m.def("sensitivity_matrix", &sensitivity_matrix);
   // m.def("sensitivity_gradient", &sensitivity_gradient);
-  m.def("sensitivity_gradient_test1", &sensitivity_gradient_test1);
-  m.def("sensitivity_gradient_test2", &sensitivity_gradient_test2);
-  m.def("fiber_gradient", &fiber_gradient);
+  m.def("model_hessian_finite_differences", &model_hessian_finite_differences);
+  m.def("model_hessian", &model_hessian);
+  m.def("model_gradient", &model_gradient);
   // m.def("model_gradient", &model_gradient);
-  m.def("fiber_finite_differences", &fiber_finite_differences);
+  m.def("model_gradient_finite_differences", &model_gradient_finite_differences);
   m.def("distance_finite_differences", &distance_finite_differences);
 }
