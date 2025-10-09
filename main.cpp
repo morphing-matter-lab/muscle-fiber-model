@@ -21,50 +21,47 @@
 #include <numbers>
 
 #include "FiberStress.h"
-#include "ActinBundle.h"
 #include "newton.h"
 #include "distance.h"
-#include "NeoHookeanMURI.h"
+#include "MuscleTissueModel.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 using namespace std::numbers;
 
-Eigen::VectorXd sensitivity_gradient(nb::DRef<Eigen::MatrixXd> V,
-                                  const nb::DRef<Eigen::MatrixXd> &P,
-                                  const nb::DRef<Eigen::MatrixXi> &F,
-                                  const nb::DRef<Eigen::MatrixXd> &Phi,
-                                  const nb::DRef<Eigen::VectorXd> &distance_grad,
-                                  const std::vector<int> &fixed_idx,
-                                  double stretch,
-                                  double poisson_ratio,
-                                  double sigma_max)
-{
-  using namespace Eigen;
+// Eigen::VectorXd sensitivity_gradient(nb::DRef<Eigen::MatrixXd> V,
+//                                   const nb::DRef<Eigen::MatrixXd> &P,
+//                                   const nb::DRef<Eigen::MatrixXi> &F,
+//                                   const nb::DRef<Eigen::MatrixXd> &Phi,
+//                                   const nb::DRef<Eigen::VectorXd> &distance_grad,
+//                                   const std::vector<int> &fixed_idx,
+//                                   double stretch,
+//                                   double poisson_ratio,
+//                                   double sigma_max)
+// {
+//   using namespace Eigen;
 
-  const double young_modulus = 1;
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
-      ActinBundle(P / stretch, F, Phi, sigma_max));
-  LLTSolver solver;
-  SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
-  filter_var(H, fixed_idx);
+//   const double young_modulus = 1;
+//   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch, sigma_max);
+//   LLTSolver solver;
+//   SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
+//   filter_var(H, fixed_idx);
 
-  solver.compute(H);
-  if (solver.info() != Success)
-    std::cout << "Factorization failed.\n";
+//   solver.compute(H);
+//   if (solver.info() != Success)
+//     std::cout << "Factorization failed.\n";
 
-  VectorXd distance_grad_cp(distance_grad);
-  filter_var(distance_grad_cp, fixed_idx);
-  VectorXd res = -solver.solve(distance_grad_cp);
+//   VectorXd distance_grad_cp(distance_grad);
+//   filter_var(distance_grad_cp, fixed_idx);
+//   VectorXd res = -solver.solve(distance_grad_cp);
 
-  VectorXd gradient_stretch = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
-  VectorXd gradient_sigma = model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
-  filter_var(gradient_stretch, fixed_idx);
-  filter_var(gradient_sigma, fixed_idx);
+//   VectorXd gradient_stretch = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
+//   VectorXd gradient_sigma = model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
+//   filter_var(gradient_stretch, fixed_idx);
+//   filter_var(gradient_sigma, fixed_idx);
 
-  return Vector2d(res.dot(gradient_stretch), res.dot(gradient_sigma));
-}
+//   return Vector2d(res.dot(gradient_stretch), res.dot(gradient_sigma));
+// }
 
 Eigen::MatrixXd sensitivity_gradient_test1(nb::DRef<Eigen::MatrixXd> V,
                                   const nb::DRef<Eigen::MatrixXd> &P,
@@ -78,9 +75,7 @@ Eigen::MatrixXd sensitivity_gradient_test1(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
 
   const double young_modulus = 1;
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
-      ActinBundle(P / stretch, F, Phi, sigma_max));
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch, sigma_max);
 
   SparseMatrix<double> H = fsim::finite_differences_sparse([&](const VectorXd &X) { return model.gradient(X); }, V.reshaped<RowMajor>());
   filter_var(H, fixed_idx);
@@ -102,9 +97,7 @@ Eigen::MatrixXd sensitivity_gradient_test2(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
 
   const double young_modulus = 1;
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
-      ActinBundle(P / stretch, F, Phi, sigma_max));
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch, sigma_max);
 
   SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
   // filter_var(H, fixed_idx);
@@ -113,41 +106,39 @@ Eigen::MatrixXd sensitivity_gradient_test2(nb::DRef<Eigen::MatrixXd> V,
 }
 
 
-Eigen::MatrixXd sensitivity_matrix(nb::DRef<Eigen::MatrixXd> V,
-                                  const nb::DRef<Eigen::MatrixXd> &P,
-                                  const nb::DRef<Eigen::MatrixXi> &F,
-                                  const nb::DRef<Eigen::MatrixXd> &Phi,
-                                  const std::vector<int> &fixed_idx,
-                                  double stretch,
-                                  double poisson_ratio,
-                                  double sigma_max)
-{
-  using namespace Eigen;
+// Eigen::MatrixXd sensitivity_matrix(nb::DRef<Eigen::MatrixXd> V,
+//                                   const nb::DRef<Eigen::MatrixXd> &P,
+//                                   const nb::DRef<Eigen::MatrixXi> &F,
+//                                   const nb::DRef<Eigen::MatrixXd> &Phi,
+//                                   const std::vector<int> &fixed_idx,
+//                                   double stretch,
+//                                   double poisson_ratio,
+//                                   double sigma_max)
+// {
+//   using namespace Eigen;
 
-  const double young_modulus = 1;
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch),
-      ActinBundle(P / stretch, F, Phi, sigma_max));
-  LLTSolver solver;
-  SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
+//   const double young_modulus = 1;
+//   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch, sigma_max);
+//   LLTSolver solver;
+//   SparseMatrix<double> H = model.hessian(V.reshaped<RowMajor>());
 
-  // Build matrix proj
-  Eigen::SparseMatrix<double> proj = projectionMatrix(fixed_idx, V.size());
-  H = (proj * H * proj.transpose()).eval();
+//   // Build matrix proj
+//   Eigen::SparseMatrix<double> proj = projectionMatrix(fixed_idx, V.size());
+//   H = (proj * H * proj.transpose()).eval();
 
-  solver.compute(H);
-  if (solver.info() != Success)
-    std::cout << "Factorization failed.\n";
+//   solver.compute(H);
+//   if (solver.info() != Success)
+//     std::cout << "Factorization failed.\n";
 
-  VectorXd gradient_stretch = proj * model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
-  VectorXd gradient_sigma = proj * model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
+//   VectorXd gradient_stretch = proj * model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch);
+//   VectorXd gradient_sigma = proj * model.getModel<1>().gradient_derivative_sensitivity(V.reshaped<RowMajor>());
 
-  MatrixXd res(V.size(), 2);
-  res.col(0) = -proj.transpose() * solver.solve(gradient_stretch);
-  res.col(1) = -proj.transpose() * solver.solve(gradient_sigma);
+//   MatrixXd res(V.size(), 2);
+//   res.col(0) = -proj.transpose() * solver.solve(gradient_stretch);
+//   res.col(1) = -proj.transpose() * solver.solve(gradient_sigma);
 
-  return res;
-}
+//   return res;
+// }
 
 std::tuple<std::vector<double>, Eigen::MatrixXd> compute_stretch_angles(const Eigen::MatrixXd &V,
                                                                         const Eigen::MatrixXd &P,
@@ -260,9 +251,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   // declare NeohookeanMembrane object
   double young_modulus = 1;
 
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
-      ActinBundle(P / stretch_factor, F, Phi, sigma_max));
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -276,7 +265,29 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
 }
 
-Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
+// Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
+//                        const nb::DRef<Eigen::MatrixXd> &P,
+//                        const nb::DRef<Eigen::MatrixXi> &F,
+//                        const nb::DRef<Eigen::MatrixXd> &Phi,
+//                        const std::vector<int> &fixed_idx,
+//                        double stretch_factor,
+//                        double poisson_ratio,
+//                        double sigma_max)
+// {
+//   using namespace Eigen;
+
+//   // declare NeohookeanMembrane object
+//   double young_modulus = 1;
+
+//   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+
+//   VectorXd grad = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch_factor);
+//   // filter_var(grad, fixed_idx);
+
+//   return grad;
+// }
+
+Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
@@ -286,29 +297,9 @@ Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
                        double sigma_max)
 {
   using namespace Eigen;
-
-  // declare NeohookeanMembrane object
   double young_modulus = 1;
 
-  fsim::CompositeModel model(
-      NeoHookeanMURI(P, F, young_modulus, poisson_ratio, stretch_factor),
-      ActinBundle(P / stretch_factor, F, Phi, sigma_max));
-
-  VectorXd grad = model.getModel<0>().gradient_derivative_sensitivity(V.reshaped<RowMajor>(), stretch_factor);
-  // filter_var(grad, fixed_idx);
-
-  return grad;
-}
-
-Eigen::VectorXd fiber_gradient(nb::DRef<Eigen::MatrixXd> V,
-                       const nb::DRef<Eigen::MatrixXd> &P,
-                       const nb::DRef<Eigen::MatrixXi> &F,
-                       const nb::DRef<Eigen::MatrixXd> &Phi,
-                       double sigma_max)
-{
-  using namespace Eigen;
-
-  ActinBundle model(P, F, Phi, sigma_max);
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
   return model.gradient(V.reshaped<RowMajor>());
 }
@@ -318,11 +309,15 @@ Eigen::VectorXd fiber_finite_differences(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::MatrixXd> &Phi,
+                       const std::vector<int> &fixed_idx,
+                       double stretch_factor,
+                       double poisson_ratio,
                        double sigma_max)
 {
   using namespace Eigen;
+  double young_modulus = 1;
 
-  ActinBundle model(P, F, Phi, sigma_max);
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
   return fsim::finite_differences([&](const VectorXd &X) { return model.energy(X); }, V.reshaped<RowMajor>());
 }
@@ -660,12 +655,12 @@ NB_MODULE(fabsim_py, m)
   m.def("distance", &distance);
   m.def("distance_gradient", &distanceGrad);
   m.def("histogram_data_to_mesh", &histogram_data_to_mesh);
-  m.def("sensitivity_matrix", &sensitivity_matrix);
-  m.def("sensitivity_gradient", &sensitivity_gradient);
+  // m.def("sensitivity_matrix", &sensitivity_matrix);
+  // m.def("sensitivity_gradient", &sensitivity_gradient);
   m.def("sensitivity_gradient_test1", &sensitivity_gradient_test1);
   m.def("sensitivity_gradient_test2", &sensitivity_gradient_test2);
   m.def("fiber_gradient", &fiber_gradient);
-  m.def("model_gradient", &model_gradient);
+  // m.def("model_gradient", &model_gradient);
   m.def("fiber_finite_differences", &fiber_finite_differences);
   m.def("distance_finite_differences", &distance_finite_differences);
 }
