@@ -64,6 +64,8 @@ public:
     _stretch = stretch;
   }
 
+  Eigen::MatrixXd updatePhi(const Eigen::Ref<const Eigen::VectorXd> X);
+
   void setPoissonRatio(double poisson_ratio)
   {
     _nu = poisson_ratio;

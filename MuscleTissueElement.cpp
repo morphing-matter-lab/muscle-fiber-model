@@ -92,6 +92,8 @@ double MuscleTissueElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, do
   double lnJ = log(C.determinant()) / 2;
 
   return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * ((C * Phi).trace() - 1));
+  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * std::pow((C * Phi).trace() - 1, 2));
+  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * std::pow(std::sqrt((C * Phi).trace()) - 1, 2));
 }
 
 fsim::Vec<double, 6>

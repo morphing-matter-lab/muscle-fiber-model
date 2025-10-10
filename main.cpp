@@ -251,7 +251,8 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   double young_modulus = 1;
 
   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-
+  model.updatePhi(V.reshaped<RowMajor>());
+  
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
   // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
@@ -262,6 +263,26 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   solver.solve(model, V.reshaped<RowMajor>());
 
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+}
+
+
+Eigen::MatrixXd update_phi(nb::DRef<Eigen::MatrixXd> V,
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::MatrixXd> &Phi,
+                       const std::vector<int> &fixed_idx,
+                       double stretch_factor,
+                       double poisson_ratio,
+                       double sigma_max)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double young_modulus = 1;
+
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+
+  return model.updatePhi(V.reshaped<RowMajor>());
 }
 
 // Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
@@ -660,5 +681,5 @@ NB_MODULE(fabsim_py, m)
   m.def("model_gradient", &model_gradient);
   // m.def("model_gradient", &model_gradient);
   m.def("model_gradient_finite_differences", &model_gradient_finite_differences);
-  m.def("distance_finite_differences", &distance_finite_differences);
+  m.def("update_Phi", &update_phi);
 }

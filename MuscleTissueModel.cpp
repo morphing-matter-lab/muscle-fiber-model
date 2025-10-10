@@ -29,6 +29,29 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
     _elements.emplace_back(V, F.row(i), Phi.row(i));
 }
 
+Eigen::MatrixXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
+{
+  using namespace Eigen;
+
+  MatrixXd Phis(_elements.size(), _elements[0].Phi.size());
+
+  for(int i = 0; i < _elements.size(); ++i)
+  {
+    Matrix2d F = _elements[i].deformationGradient(X, _stretch);
+    Matrix2d R = F.jacobiSvd(ComputeFullU | ComputeFullV).matrixU() * F.jacobiSvd(ComputeFullU | ComputeFullV).matrixV().transpose();
+    _elements[i].Phi = R.transpose() * _elements[i].Phi * R;
+
+    int n = Phis.cols();
+    for(int j = 0; j < n; ++j)
+    {
+      Vector2d u(cos(j * 3.14159 / n), sin(j * 3.14159 / n));
+      Phis(i, j) = u.dot(_elements[i].Phi * u);
+    }
+  }
+
+  return Phis;
+}
+
 
 double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
