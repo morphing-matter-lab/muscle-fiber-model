@@ -34,6 +34,26 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
   Phi /= n;
 }
 
+MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, double mean_theta, double concentration_eta, double phi)
+{
+  using namespace Eigen;
+  using namespace std::numbers;
+
+  idx = E;
+
+  Vector2d e1 = V.row(E(0)) - V.row(E(2));
+  Vector2d e2 = V.row(E(1)) - V.row(E(2));
+
+  R.col(0) << e1;
+  R.col(1) << e2;
+  R = R.inverse().eval();
+
+  area = 0.5 * (e1(0) * e2(1) - e2(0) * e1(1));
+
+  Vector2d u0 = Vector2d(std::cos(mean_theta), std::sin(mean_theta));
+
+  Phi = phi * (concentration_eta * Matrix2d::Identity() + (1 - 2 * concentration_eta) * u0 * u0.transpose());
+}
 
 Eigen::Matrix2d MuscleTissueElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
 {

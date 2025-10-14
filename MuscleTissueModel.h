@@ -29,7 +29,15 @@ public:
                     double stretch,
                     double sigma);
 
-
+  MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
+                    const Eigen::Ref<const fsim::Mat3<int>> F,
+                    const Eigen::Ref<const Eigen::VectorXd> theta0,
+                    const Eigen::Ref<const Eigen::VectorXd> eta,
+                    const Eigen::Ref<const Eigen::VectorXd> phi,
+                    double young_modulus,
+                    double poisson_ratio,
+                    double stretch,
+                    double sigma);
   /**
    * energy function of this material model   f : \R^n -> \R
    * @param X  a flat vector stacking all degrees of freedom
