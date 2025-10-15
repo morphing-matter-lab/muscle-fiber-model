@@ -47,11 +47,11 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
     _elements.emplace_back(V, F.row(i), theta0(i), eta(i), phi(i));
 }
 
-Eigen::MatrixXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
+Eigen::VectorXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
 {
   using namespace Eigen;
 
-  MatrixXd Phis(_elements.size(), _elements[0].Phi.size());
+  VectorXd thetas(_elements.size());
 
   for (int i = 0; i < _elements.size(); ++i)
   {
@@ -59,15 +59,10 @@ Eigen::MatrixXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::Vecto
     Matrix2d R = F.jacobiSvd(ComputeFullU | ComputeFullV).matrixU() * F.jacobiSvd(ComputeFullU | ComputeFullV).matrixV().transpose();
     _elements[i].Phi = R.transpose() * _elements[i].Phi * R;
 
-    int n = Phis.cols();
-    for (int j = 0; j < n; ++j)
-    {
-      Vector2d u(cos(j * 3.14159 / n), sin(j * 3.14159 / n));
-      Phis(i, j) = u.dot(_elements[i].Phi * u);
-    }
+    thetas(i) = -std::atan2(R(1,0), R(0,0));
   }
 
-  return Phis;
+  return thetas;
 }
 
 double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) const

@@ -43,6 +43,7 @@ nanobind_add_module(fabsim_py
 	newton.cpp
 	distance.cpp
 	main.cpp
+	data_to_mesh.cpp
 	MuscleTissueElement.cpp
 	MuscleTissueModel.cpp)
 target_link_libraries(fabsim_py PRIVATE Eigen3::Eigen fabsim optim TinyAD igl::core igl_restricted::triangle)

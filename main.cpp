@@ -241,7 +241,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::VectorXd> theta0,
                        const nb::DRef<Eigen::VectorXd> eta,
-                       const nb::DRef<Eigen::VectorXd> phi, 
+                       const nb::DRef<Eigen::VectorXd> phi,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
                        double poisson_ratio,
@@ -267,23 +267,25 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
 }
 
-Eigen::MatrixXd update_phi(nb::DRef<Eigen::MatrixXd> V,
-                           const nb::DRef<Eigen::MatrixXd> &P,
-                           const nb::DRef<Eigen::MatrixXi> &F,
-                           const nb::DRef<Eigen::MatrixXd> &Phi,
-                           const std::vector<int> &fixed_idx,
-                           double stretch_factor,
-                           double poisson_ratio,
-                           double sigma_max)
+void update_phi(nb::DRef<Eigen::MatrixXd> V,
+                const nb::DRef<Eigen::MatrixXd> &P,
+                const nb::DRef<Eigen::MatrixXi> &F,
+                nb::DRef<Eigen::VectorXd> theta0,
+                const nb::DRef<Eigen::VectorXd> &eta,
+                const nb::DRef<Eigen::VectorXd> &phi,
+                const std::vector<int> &fixed_idx,
+                double stretch_factor,
+                double poisson_ratio,
+                double sigma_max)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
   double young_modulus = 1;
 
-  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+  MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
-  return model.updatePhi(V.reshaped<RowMajor>());
+  theta0 += model.updatePhi(V.reshaped<RowMajor>());
 }
 
 // Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,

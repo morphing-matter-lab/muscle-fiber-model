@@ -72,7 +72,7 @@ public:
     _stretch = stretch;
   }
 
-  Eigen::MatrixXd updatePhi(const Eigen::Ref<const Eigen::VectorXd> X);
+  Eigen::VectorXd updatePhi(const Eigen::Ref<const Eigen::VectorXd> X);
 
   void setPoissonRatio(double poisson_ratio)
   {
