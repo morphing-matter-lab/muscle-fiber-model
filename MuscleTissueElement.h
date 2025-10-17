@@ -56,6 +56,7 @@ public:
   Eigen::Matrix3d elasticityTensor(const Eigen::Matrix2d &F, double lambda, double mu, double stretch, double sigma) const;
 
   double area;
+  double coeff;
   Eigen::Matrix2d R;
   Eigen::Matrix2d Phi;
 };

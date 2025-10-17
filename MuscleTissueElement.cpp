@@ -39,6 +39,7 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
   using namespace Eigen;
 
   idx = E;
+  coeff = phi;
 
   Vector2d e1 = V.row(E(0)) - V.row(E(2));
   Vector2d e2 = V.row(E(1)) - V.row(E(2));
@@ -51,7 +52,7 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
 
   Vector2d u0 = Vector2d(std::cos(mean_theta), std::sin(mean_theta));
 
-  Phi = phi * (concentration_eta * Matrix2d::Identity() + (1 - 2 * concentration_eta) * u0 * u0.transpose());
+  Phi = concentration_eta * Matrix2d::Identity() + (1 - 2 * concentration_eta) * u0 * u0.transpose();
 }
 
 Eigen::Matrix2d MuscleTissueElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
@@ -73,11 +74,10 @@ Eigen::Matrix2d MuscleTissueElement::stress(const Eigen::Matrix2d &F, double lam
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
-  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * Phi;
-  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * 2 * ((C * Phi).trace() - 1) * Phi;
-  return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * (1 - 1 / std::sqrt((C * Phi).trace())) * Phi;
+  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * Phi;
+  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * 2 * ((C * Phi).trace() - 1) * Phi;
+  return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * (1 - 1 / std::sqrt((C * Phi).trace())) * Phi;
 }
-
 
 Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, double lambda, double mu, double stretch, double sigma) const
 {
@@ -89,15 +89,15 @@ Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, 
   double lnJ = log(C.determinant()) / 2;
 
   Matrix3d _C;
-  _C << Cinv(0, 0) * Cinv(0, 0), Cinv(0, 1) * Cinv(0, 1), Cinv(0, 0) * Cinv(0, 1), 
-        Cinv(1, 0) * Cinv(1, 0), Cinv(1, 1) * Cinv(1, 1), Cinv(0, 1) * Cinv(1, 1), 
-        Cinv(0, 1) * Cinv(0, 0), Cinv(0, 1) * Cinv(1, 1), (Cinv(0, 0) * Cinv(1, 1) + Cinv(0, 1) * Cinv(0, 1)) / 2;
+  _C << Cinv(0, 0) * Cinv(0, 0), Cinv(0, 1) * Cinv(0, 1), Cinv(0, 0) * Cinv(0, 1),
+      Cinv(1, 0) * Cinv(1, 0), Cinv(1, 1) * Cinv(1, 1), Cinv(0, 1) * Cinv(1, 1),
+      Cinv(0, 1) * Cinv(0, 0), Cinv(0, 1) * Cinv(1, 1), (Cinv(0, 0) * Cinv(1, 1) + Cinv(0, 1) * Cinv(0, 1)) / 2;
   _C *= 2 * (mu - lambda * lnJ);
   _C += lambda * Vector3d(Cinv(0, 0), Cinv(1, 1), Cinv(0, 1)) * RowVector3d(Cinv(0, 0), Cinv(1, 1), Cinv(0, 1));
 
-  Vector3d Phi_vec(Phi(0,0), Phi(1,1), Phi(0,1));
-  // _C += 4 * sigma * Phi_vec * Phi_vec.transpose();
-  _C += sigma * std::pow((C * Phi).trace(), -3/2.) * Phi_vec * Phi_vec.transpose();
+  Vector3d Phi_vec(Phi(0, 0), Phi(1, 1), Phi(0, 1));
+  // _C += 4 * sigma * coeff * Phi_vec * Phi_vec.transpose();
+  _C += sigma * coeff * std::pow((C * Phi).trace(), -3 / 2.) * Phi_vec * Phi_vec.transpose();
 
   return _C;
 }
@@ -110,9 +110,9 @@ double MuscleTissueElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, do
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
-  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * ((C * Phi).trace() - 1));
-  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * std::pow((C * Phi).trace() - 1, 2));
-  return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * std::pow(std::sqrt((C * Phi).trace()) - 1, 2));
+  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * ((C * Phi).trace() - 1));
+  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * std::pow((C * Phi).trace() - 1, 2));
+  return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * std::pow(std::sqrt((C * Phi).trace()) - 1, 2));
 }
 
 fsim::Vec<double, 6>
