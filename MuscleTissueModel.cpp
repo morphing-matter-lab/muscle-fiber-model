@@ -59,7 +59,7 @@ Eigen::VectorXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::Vecto
     Matrix2d R = F.jacobiSvd(ComputeFullU | ComputeFullV).matrixU() * F.jacobiSvd(ComputeFullU | ComputeFullV).matrixV().transpose();
     _elements[i].Phi = R.transpose() * _elements[i].Phi * R;
 
-    thetas(i) = -std::atan2(R(1,0), R(0,0));
+    thetas(i) = -std::atan2(R(1, 0), R(0, 0));
   }
 
   return thetas;
@@ -145,9 +145,9 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
   return triplets;
 }
 
-Eigen::VectorXd  MuscleTissueModel::I5(const Eigen::Ref<const Eigen::VectorXd> X) const
+Eigen::VectorXd MuscleTissueModel::I5(const Eigen::Ref<const Eigen::VectorXd> X) const
 {
-  using namespace Eigen; 
+  using namespace Eigen;
   VectorXd Y(_elements.size());
   for (int i = 0; i < _elements.size(); ++i)
   {
@@ -157,4 +157,59 @@ Eigen::VectorXd  MuscleTissueModel::I5(const Eigen::Ref<const Eigen::VectorXd> X
   }
 
   return Y;
+}
+
+Eigen::MatrixXd MuscleTissueModel::theta0(const Eigen::Ref<const Eigen::VectorXd> X) const
+{
+  using namespace Eigen;
+  MatrixXd dirs(_elements.size(), 2);
+  VectorXd thetas(_elements.size());
+  for (int i = 0; i < _elements.size(); ++i)
+  {
+    Matrix2d F = _elements[i].deformationGradient(X, _stretch);
+    // Matrix2d C = F.transpose() * F;
+    // Matrix2d V = C.jacobiSvd(ComputeFullU | ComputeFullV).matrixV();
+    // Matrix2d U = C.jacobiSvd(ComputeFullU | ComputeFullV).matrixU();
+    // std::cout << V.determinant() << " " << U.determinant() << " " << (U * V).determinant() << "\n";
+    // dirs.row(i) = (U * V.transpose()).col(0);
+
+    double y1 = F(1, 0) + F(0, 1);
+    double x1 = F(0, 0) - F(1, 1);
+    double y2 = F(1, 0) - F(0, 1);
+    double x2 = F(0, 0) + F(1, 1);
+
+    if (std::abs(y1) < std::numeric_limits<double>::min() && std::abs(x1) < std::numeric_limits<double>::min())
+    {
+      // U = Matrix2d::Identity();
+      // double s0 = std::hypot(F(0, 0), F(0, 1));
+      // double s1 = std::hypot(F(1, 0), F(1, 1));
+      // if(std::abs(s0) < std::numeric_limits<double>::min())
+      //     V = Matrix2d::Identity();
+      // else
+      //     V = DiagonalMatrix<double, 2>(1 / s0, 1 / s1) * F;
+      thetas(i) = 0;
+      dirs.row(i) << 1, 0;
+    }
+    else if (std::abs(y2) < std::numeric_limits<double>::min() && std::abs(x2) < std::numeric_limits<double>::min())
+    {
+      // U = Matrix2d::Identity();
+      // double s0 = std::hypot(F(0, 0), F(0, 1));
+      // double s1 = -std::hypot(F(1, 0), F(1, 1));
+      // V = DiagonalMatrix<double, 2>(1 / s0, 1 / s1) * F;
+      thetas(i) = 0;
+      dirs.row(i) << 1, 0;
+    }
+    else
+    {
+      double a1 = std::atan2(y1, x1);
+      double a2 = std::atan2(y2, x2);
+
+      // U = Rotation2D<double>((a2 + a1) / 2);
+      // V = Rotation2D<double>((a2 - a1) / 2);
+      thetas(i) = (a2 - a1) / 2;
+      dirs.row(i) << std::cos(thetas(i)), std::sin(thetas(i));
+    }
+  }
+
+  return dirs;
 }

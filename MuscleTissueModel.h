@@ -68,6 +68,7 @@ public:
   std::vector<Eigen::Triplet<double>> hessianTriplets(const Eigen::Ref<const Eigen::VectorXd> X) const;
 
   Eigen::VectorXd I5(const Eigen::Ref<const Eigen::VectorXd> X) const;
+  Eigen::MatrixXd theta0(const Eigen::Ref<const Eigen::VectorXd> X) const;
 
   void setStretch(double stretch)
   {
