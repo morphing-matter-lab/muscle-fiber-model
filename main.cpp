@@ -239,9 +239,9 @@ compute_membrane_forces(const Eigen::MatrixXd &V,
 void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
-                       const nb::DRef<Eigen::VectorXd> theta0,
-                       const nb::DRef<Eigen::VectorXd> eta,
-                       const nb::DRef<Eigen::VectorXd> phi,
+                       const nb::DRef<Eigen::VectorXd> &theta0,
+                       const nb::DRef<Eigen::VectorXd> &eta,
+                       const nb::DRef<Eigen::VectorXd> &phi,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
                        double poisson_ratio,
@@ -265,6 +265,28 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   solver.solve(model, V.reshaped<RowMajor>());
 
   V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+}
+
+Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
+        const nb::DRef<Eigen::MatrixXd> &P,
+        const nb::DRef<Eigen::MatrixXi> &F,
+        const nb::DRef<Eigen::VectorXd> &theta0,
+        const nb::DRef<Eigen::VectorXd> &eta,
+        const nb::DRef<Eigen::VectorXd> &phi,
+        const std::vector<int> &fixed_idx,
+        double stretch_factor,
+        double poisson_ratio,
+        double sigma_max)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double young_modulus = 1;
+
+  MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+  // model.updatePhi(V.reshaped<RowMajor>());
+
+  return model.I5(V.reshaped<RowMajor>());
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,
@@ -535,4 +557,5 @@ NB_MODULE(fabsim_py, m)
   // m.def("model_gradient", &model_gradient);
   m.def("model_gradient_finite_differences", &model_gradient_finite_differences);
   m.def("update_Phi", &update_phi);
+  m.def("I5", &I5);
 }

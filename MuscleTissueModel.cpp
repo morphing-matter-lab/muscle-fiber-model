@@ -144,3 +144,17 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
 
   return triplets;
 }
+
+Eigen::VectorXd  MuscleTissueModel::I5(const Eigen::Ref<const Eigen::VectorXd> X) const
+{
+  using namespace Eigen; 
+  VectorXd Y(_elements.size());
+  for (int i = 0; i < _elements.size(); ++i)
+  {
+    Matrix2d F = _elements[i].deformationGradient(X, _stretch);
+    Matrix2d C = F.transpose() * F;
+    Y(i) = (C * _elements[i].Phi).trace();
+  }
+
+  return Y;
+}
