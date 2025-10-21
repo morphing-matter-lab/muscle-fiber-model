@@ -268,15 +268,15 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 }
 
 Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
-        const nb::DRef<Eigen::MatrixXd> &P,
-        const nb::DRef<Eigen::MatrixXi> &F,
-        const nb::DRef<Eigen::VectorXd> &theta0,
-        const nb::DRef<Eigen::VectorXd> &eta,
-        const nb::DRef<Eigen::VectorXd> &phi,
-        const std::vector<int> &fixed_idx,
-        double stretch_factor,
-        double poisson_ratio,
-        double sigma_max)
+                   const nb::DRef<Eigen::MatrixXd> &P,
+                   const nb::DRef<Eigen::MatrixXi> &F,
+                   const nb::DRef<Eigen::VectorXd> &theta0,
+                   const nb::DRef<Eigen::VectorXd> &eta,
+                   const nb::DRef<Eigen::VectorXd> &phi,
+                   const std::vector<int> &fixed_idx,
+                   double stretch_factor,
+                   double poisson_ratio,
+                   double sigma_max)
 {
   using namespace Eigen;
 
@@ -289,17 +289,16 @@ Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
   return model.I5(V.reshaped<RowMajor>());
 }
 
-
 Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
-        const nb::DRef<Eigen::MatrixXd> &P,
-        const nb::DRef<Eigen::MatrixXi> &F,
-        const nb::DRef<Eigen::VectorXd> &theta0,
-        const nb::DRef<Eigen::VectorXd> &eta,
-        const nb::DRef<Eigen::VectorXd> &phi,
-        const std::vector<int> &fixed_idx,
-        double stretch_factor,
-        double poisson_ratio,
-        double sigma_max)
+                       const nb::DRef<Eigen::MatrixXd> &P,
+                       const nb::DRef<Eigen::MatrixXi> &F,
+                       const nb::DRef<Eigen::VectorXd> &theta0,
+                       const nb::DRef<Eigen::VectorXd> &eta,
+                       const nb::DRef<Eigen::VectorXd> &phi,
+                       const std::vector<int> &fixed_idx,
+                       double stretch_factor,
+                       double poisson_ratio,
+                       double sigma_max)
 {
   using namespace Eigen;
 
@@ -310,6 +309,31 @@ Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
   // model.updatePhi(V.reshaped<RowMajor>());
 
   return model.theta0(V.reshaped<RowMajor>());
+}
+
+Eigen::MatrixXd phi_ode(const nb::DRef<Eigen::MatrixXd> &V,
+                        const nb::DRef<Eigen::MatrixXd> &P,
+                        const nb::DRef<Eigen::MatrixXi> &F,
+                        double stretch_factor,
+                        double poisson_ratio,
+                        double sigma_max,
+                        double k0,
+                        double k1,
+                        double kd,
+                        double dt,
+                        int n)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double young_modulus = 1;
+
+  MatrixXd Phi = MatrixXd::Zero(F.rows(), 2);
+
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+  // model.updatePhi(V.reshaped<RowMajor>());
+
+  return model.phi_ODE(V.reshaped<RowMajor>(), k0, k1, kd, dt, n);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,
@@ -582,4 +606,5 @@ NB_MODULE(fabsim_py, m)
   m.def("update_Phi", &update_phi);
   m.def("I5", &I5);
   m.def("theta0", &theta0);
+  m.def("phi_ode", &phi_ode);
 }
