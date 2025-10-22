@@ -175,18 +175,19 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
     {
       Matrix2d Phi = Phis.block<2, 2>(2 * i, 0);
       double phi_m = 0.05 - Phi.trace();
-      
+
       // compute stress
       double I5 = (C * Phi).trace();
       Matrix2d stress;
-      
+
+      // if (I5 <= Phi.trace())
       if (I5 < 1e-8)
-      stress = Matrix2d::Zero();
+        stress = Matrix2d::Zero();
       else
-      stress = _sigma * (1 - std::sqrt(Phi.trace() / I5)) * F * Phi * F.transpose();
-      
+        stress = _sigma * (1 - std::sqrt(Phi.trace() / I5)) * F * Phi * F.transpose();
+
       Matrix2d dPhi_dt = phi_m / phi_f * (k0 / 2 * Matrix2d::Identity() + k1 * stress) - kd * Phi;
-      
+
       Phis.block<2, 2>(2 * i, 0) += dt * dPhi_dt;
     }
   }
