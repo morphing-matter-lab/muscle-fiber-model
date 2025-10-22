@@ -270,43 +270,44 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
                    const nb::DRef<Eigen::MatrixXd> &P,
                    const nb::DRef<Eigen::MatrixXi> &F,
-                   const nb::DRef<Eigen::VectorXd> &theta0,
+                   const nb::DRef<Eigen::MatrixXd> &orientations,
                    const nb::DRef<Eigen::VectorXd> &eta,
-                   const nb::DRef<Eigen::VectorXd> &phi,
-                   const std::vector<int> &fixed_idx,
-                   double stretch_factor,
-                   double poisson_ratio,
-                   double sigma_max)
+                   double stretch_factor)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
   double young_modulus = 1;
+  double poisson_ratio = 0.49;
+  double sigma_max = 1;
+  MatrixXd Phi = MatrixXd::Zero(F.rows(), 2);
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
-  MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  // model.updatePhi(V.reshaped<RowMajor>());
+  VectorXd res(model._elements.size());
+  for (int i = 0; i < model._elements.size(); ++i)
+  {
+    Matrix2d F = model._elements[i].deformationGradient(V.reshaped<RowMajor>(), stretch_factor);
+    Matrix2d C = F.transpose() * F;
+    Vector2d u = orientations.row(i);
+    res(i) = eta(i) * C.trace() + (1 - 2 * eta(i)) * (F * u).squaredNorm();
+  }
 
-  return model.I5(V.reshaped<RowMajor>());
+  return res;
 }
 
 Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
                        const nb::DRef<Eigen::MatrixXd> &P,
                        const nb::DRef<Eigen::MatrixXi> &F,
-                       const nb::DRef<Eigen::VectorXd> &theta0,
-                       const nb::DRef<Eigen::VectorXd> &eta,
-                       const nb::DRef<Eigen::VectorXd> &phi,
-                       const std::vector<int> &fixed_idx,
-                       double stretch_factor,
-                       double poisson_ratio,
-                       double sigma_max)
+                       double stretch_factor)
 {
   using namespace Eigen;
 
   // declare NeohookeanMembrane object
   double young_modulus = 1;
-
-  MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  // model.updatePhi(V.reshaped<RowMajor>());
+  double poisson_ratio = 0.49;
+  double sigma_max = 1;
+  MatrixXd Phi = MatrixXd::Zero(F.rows(), 2);
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
   return model.theta0(V.reshaped<RowMajor>());
 }
