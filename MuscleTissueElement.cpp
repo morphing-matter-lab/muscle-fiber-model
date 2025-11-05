@@ -8,7 +8,7 @@
 #include "fsim/util/geometry.h"
 #include "MuscleTissueElement.h"
 
-MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, const Eigen::VectorXd &_phi)
+MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, const Eigen::Matrix2d &_phi)
 {
   using namespace Eigen;
   using namespace std::numbers;
@@ -24,14 +24,10 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
 
   area = 0.5 * (e1(0) * e2(1) - e2(0) * e1(1));
 
-  Phi = Matrix2d::Zero();
-  const int n = _phi.size();
-  for (int i = 0; i < n; ++i)
-  {
-    Vector2d u(cos(i * pi / n), sin(i * pi / n));
-    Phi += _phi(i) * u * u.transpose();
-  }
-  Phi /= n;
+  coeff = _phi.trace();
+  if(coeff == 0)
+    coeff = 1;
+  Phi = _phi / coeff;
 }
 
 MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, double mean_theta, double concentration_eta, double phi)

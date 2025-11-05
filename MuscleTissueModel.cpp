@@ -25,7 +25,7 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
 
   _elements.reserve(F.rows());
   for (int i = 0; i < F.rows(); ++i)
-    _elements.emplace_back(V, F.row(i), Phi.row(i));
+    _elements.emplace_back(V, F.row(i), Phi.block<2, 2>(2 * i, 0));
 }
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -159,10 +159,9 @@ Eigen::VectorXd MuscleTissueModel::I5(const Eigen::Ref<const Eigen::VectorXd> X)
   return Y;
 }
 
-Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double kd, double dt, int n) const
+Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double kd, double dt, int n)
 {
   using namespace Eigen;
-  MatrixXd Phis = MatrixXd::Zero(2 * _elements.size(), 2);
 
   const double phi_f = 0.7;
 
@@ -173,7 +172,7 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
     Matrix2d C = F.transpose() * F;
     for (int k = 0; k < n; ++k)
     {
-      Matrix2d Phi = Phis.block<2, 2>(2 * i, 0);
+      Matrix2d Phi = _elements[i].Phi;
       double phi_m = 0.05 - Phi.trace();
 
       // compute stress
@@ -188,9 +187,13 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
 
       Matrix2d dPhi_dt = phi_m / phi_f * (k0 / 2 * Matrix2d::Identity() + k1 * stress) - kd * Phi;
 
-      Phis.block<2, 2>(2 * i, 0) += dt * dPhi_dt;
+      _elements[i].Phi += dt * dPhi_dt;
     }
   }
+
+  MatrixXd Phis(2 * _elements.size(), 2);
+  for (int i = 0; i < _elements.size(); ++i)
+    Phis.block<2, 2>(2 * i, 0) = _elements[i].Phi;
 
   return Phis;
 }

@@ -69,7 +69,7 @@ public:
 
   Eigen::VectorXd I5(const Eigen::Ref<const Eigen::VectorXd> X) const;
   Eigen::MatrixXd theta0(const Eigen::Ref<const Eigen::VectorXd> X) const;
-  Eigen::MatrixXd phi_ODE(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double kd, double dt, int n) const;
+  Eigen::MatrixXd phi_ODE(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double kd, double dt, int n);
 
   void setStretch(double stretch)
   {

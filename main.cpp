@@ -241,7 +241,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
                        const nb::DRef<Eigen::MatrixXi> &F,
                        const nb::DRef<Eigen::VectorXd> &theta0,
                        const nb::DRef<Eigen::VectorXd> &eta,
-                       const nb::DRef<Eigen::VectorXd> &phi,
+                       const nb::DRef<Eigen::MatrixXd> &phi,
                        const std::vector<int> &fixed_idx,
                        double stretch_factor,
                        double poisson_ratio,
@@ -249,22 +249,55 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 {
   using namespace Eigen;
 
-  // declare NeohookeanMembrane object
-  double young_modulus = 1;
+  const double young_modulus = 1;
+  if (theta0.size() != 0 && eta.size() != 0 && phi.cols() == 1)
+  {
+    // declare NeohookeanMembrane object
+    MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
-  MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  // model.updatePhi(V.reshaped<RowMajor>());
+    // declare NewtonSolver object
+    optim::NewtonSolver<double> solver;
+    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+    solver.options.fixed_dofs = fixed_idx;
+    solver.options.display = optim::SolverDisplay::quiet;
 
-  // declare NewtonSolver object
-  optim::NewtonSolver<double> solver;
-  // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-  solver.options.fixed_dofs = fixed_idx;
-  solver.options.display = optim::SolverDisplay::quiet;
+    solver.solve(model, V.reshaped<RowMajor>());
 
-  solver.solve(model, V.reshaped<RowMajor>());
+    V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+  }
+  else if (phi.size() != 0 && phi.cols() == 2)
+  {
+    // declare NeohookeanMembrane object
+    MuscleTissueModel model(P, F, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
 
-  V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+    // declare NewtonSolver object
+    optim::NewtonSolver<double> solver;
+    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+    solver.options.fixed_dofs = fixed_idx;
+    solver.options.display = optim::SolverDisplay::quiet;
+
+    solver.solve(model, V.reshaped<RowMajor>());
+
+    V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+  }
+  else
+  {
+    // declare NeohookeanMembrane object
+    MuscleTissueModel model(P, F, VectorXd::Zero(F.rows()), VectorXd::Zero(F.rows()), VectorXd::Ones(F.rows()), young_modulus, poisson_ratio, stretch_factor, 0.);
+
+    // declare NewtonSolver object
+    optim::NewtonSolver<double> solver;
+    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+    solver.options.fixed_dofs = fixed_idx;
+    solver.options.display = optim::SolverDisplay::quiet;
+
+    solver.solve(model, V.reshaped<RowMajor>());
+
+    V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+  }
 }
 
 Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
@@ -312,29 +345,22 @@ Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
   return model.theta0(V.reshaped<RowMajor>());
 }
 
-Eigen::MatrixXd phi_ode(const nb::DRef<Eigen::MatrixXd> &V,
-                        const nb::DRef<Eigen::MatrixXd> &P,
-                        const nb::DRef<Eigen::MatrixXi> &F,
-                        double stretch_factor,
-                        double poisson_ratio,
-                        double sigma_max,
-                        double k0,
-                        double k1,
-                        double kd,
-                        double dt,
-                        int n)
+void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
+             const nb::DRef<Eigen::MatrixXd> &V,
+             const nb::DRef<Eigen::MatrixXd> &P,
+             const nb::DRef<Eigen::MatrixXi> &F,
+             double stretch_factor,
+             double poisson_ratio,
+             double sigma_max,
+             double k0,
+             double k1,
+             double kd,
+             double dt,
+             int n)
 {
-  using namespace Eigen;
-
-  // declare NeohookeanMembrane object
   double young_modulus = 1;
-
-  MatrixXd Phi = MatrixXd::Zero(F.rows(), 2);
-
   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  // model.updatePhi(V.reshaped<RowMajor>());
-
-  return model.phi_ODE(V.reshaped<RowMajor>(), k0, k1, kd, dt, n);
+  Phi = model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,

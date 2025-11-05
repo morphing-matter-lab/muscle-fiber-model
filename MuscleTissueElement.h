@@ -17,7 +17,7 @@ public:
    * @param V  n by 2 list of vertex positions (each row is a vertex)
    * @param face  list of 3 indices, one per vertex of the triangle
    */
-  MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &face, const Eigen::VectorXd &phi);
+  MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &face, const Eigen::Matrix2d &phi);
   MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &face, double mean_theta, double concentration_eta, double phi);
 
   /**
