@@ -7,8 +7,10 @@
 #include <numbers>
 #include "fsim/util/geometry.h"
 #include "MuscleTissueElement.h"
+#include <TinyAD/Utils/HessianProjection.hh>
 
 MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, const Eigen::Matrix2d &_phi)
+    : Phi(_phi)
 {
   using namespace Eigen;
   using namespace std::numbers;
@@ -24,10 +26,6 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
 
   area = 0.5 * (e1(0) * e2(1) - e2(0) * e1(1));
 
-  coeff = _phi.trace();
-  if(coeff == 0)
-    coeff = 1;
-  Phi = _phi / coeff;
 }
 
 MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<double>> V, const Eigen::Vector3i &E, double mean_theta, double concentration_eta, double phi)
@@ -35,7 +33,6 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
   using namespace Eigen;
 
   idx = E;
-  coeff = phi;
 
   Vector2d e1 = V.row(E(0)) - V.row(E(2));
   Vector2d e2 = V.row(E(1)) - V.row(E(2));
@@ -49,6 +46,7 @@ MuscleTissueElement::MuscleTissueElement(const Eigen::Ref<const fsim::Mat2<doubl
   Vector2d u0 = Vector2d(std::cos(mean_theta), std::sin(mean_theta));
 
   Phi = concentration_eta * Matrix2d::Identity() + (1 - 2 * concentration_eta) * u0 * u0.transpose();
+  Phi *= phi;
 }
 
 Eigen::Matrix2d MuscleTissueElement::deformationGradient(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
@@ -70,9 +68,7 @@ Eigen::Matrix2d MuscleTissueElement::stress(const Eigen::Matrix2d &F, double lam
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
-  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * Phi;
-  // return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * 2 * ((C * Phi).trace() - 1) * Phi;
-  return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * coeff * (1 - 1 / std::sqrt((C * Phi).trace())) * Phi;
+  return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * (1 - std::sqrt(Phi.trace() / (C * Phi).trace())) * Phi;
 }
 
 Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, double lambda, double mu, double stretch, double sigma) const
@@ -85,15 +81,15 @@ Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, 
   double lnJ = log(C.determinant()) / 2;
 
   Matrix3d _C;
-  _C << Cinv(0, 0) * Cinv(0, 0), Cinv(0, 1) * Cinv(0, 1), Cinv(0, 0) * Cinv(0, 1),
-      Cinv(1, 0) * Cinv(1, 0), Cinv(1, 1) * Cinv(1, 1), Cinv(0, 1) * Cinv(1, 1),
-      Cinv(0, 1) * Cinv(0, 0), Cinv(0, 1) * Cinv(1, 1), (Cinv(0, 0) * Cinv(1, 1) + Cinv(0, 1) * Cinv(0, 1)) / 2;
+  _C << Cinv(0, 0) * Cinv(0, 0), Cinv(0, 1) * Cinv(0, 1), Cinv(0, 0) * Cinv(0, 1), 
+        Cinv(1, 0) * Cinv(1, 0), Cinv(1, 1) * Cinv(1, 1), Cinv(0, 1) * Cinv(1, 1), 
+        Cinv(0, 1) * Cinv(0, 0), Cinv(0, 1) * Cinv(1, 1), (Cinv(0, 0) * Cinv(1, 1) + Cinv(0, 1) * Cinv(0, 1)) / 2;
   _C *= 2 * (mu - lambda * lnJ);
   _C += lambda * Vector3d(Cinv(0, 0), Cinv(1, 1), Cinv(0, 1)) * RowVector3d(Cinv(0, 0), Cinv(1, 1), Cinv(0, 1));
 
   Vector3d Phi_vec(Phi(0, 0), Phi(1, 1), Phi(0, 1));
   // _C += 4 * sigma * coeff * Phi_vec * Phi_vec.transpose();
-  _C += sigma * coeff * std::pow((C * Phi).trace(), -3 / 2.) * Phi_vec * Phi_vec.transpose();
+  _C += sigma * std::sqrt(Phi.trace()) * std::pow((C * Phi).trace(), -3 / 2.) * Phi_vec * Phi_vec.transpose();
 
   return _C;
 }
@@ -106,9 +102,7 @@ double MuscleTissueElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, do
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
 
-  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * ((C * Phi).trace() - 1));
-  // return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * std::pow((C * Phi).trace() - 1, 2));
-  return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma * coeff / 2 * std::pow(std::sqrt((C * Phi).trace()) - 1, 2));
+  return area * (mu / 2 * (C.trace() - 2 - 2 * lnJ) + lambda / 2 * pow(lnJ, 2) + sigma / 2 * std::pow(std::sqrt((C * Phi).trace()) - std::sqrt(Phi.trace()), 2));
 }
 
 fsim::Vec<double, 6>
@@ -166,8 +160,8 @@ MuscleTissueElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double l
 
   Matrix<double, 6, 6> hess;
 
-  for (int i = 0; i < 3; ++i)
-    for (int j = i; j < 3; ++j)
+  for (int i = 0; i < 2; ++i)
+    for (int j = i; j < 2; ++j)
       hess.block<2, 2>(2 * i, 2 * j) =
           R(i, 0) * R(j, 0) * A + R(i, 1) * R(j, 1) * B + R(i, 0) * R(j, 1) * C + R(i, 1) * R(j, 0) * C.transpose();
 
@@ -176,7 +170,7 @@ MuscleTissueElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double l
   hess.block<2, 4>(4, 0) = hess.block<4, 2>(0, 4).transpose();
   hess.block<2, 2>(4, 4) = -hess.block<2, 2>(0, 4) - hess.block<2, 2>(2, 4);
 
-  // TinyAD::project_positive_definite<6, double>(hess, 1e-9);
+  TinyAD::project_positive_definite<6, double>(hess, 1e-9);
 
   return area * stretch * stretch * hess;
 }

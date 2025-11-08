@@ -260,7 +260,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
     // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
     solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
     solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
+    // solver.options.display = optim::SolverDisplay::quiet;
 
     solver.solve(model, V.reshaped<RowMajor>());
 
@@ -276,7 +276,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
     // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
     solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
     solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
+    // solver.options.display = optim::SolverDisplay::quiet;
 
     solver.solve(model, V.reshaped<RowMajor>());
 
@@ -292,7 +292,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
     // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
     solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
     solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
+    // solver.options.display = optim::SolverDisplay::quiet;
 
     solver.solve(model, V.reshaped<RowMajor>());
 
@@ -346,9 +346,10 @@ Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
 }
 
 void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
-             const nb::DRef<Eigen::MatrixXd> &V,
+             nb::DRef<Eigen::MatrixXd> V,
              const nb::DRef<Eigen::MatrixXd> &P,
              const nb::DRef<Eigen::MatrixXi> &F,
+             const std::vector<int> &fixed_idx,
              double stretch_factor,
              double poisson_ratio,
              double sigma_max,
@@ -358,9 +359,26 @@ void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
              double dt,
              int n)
 {
+  using namespace Eigen;
   double young_modulus = 1;
+    // declare NeohookeanMembrane object
   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  Phi = model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
+  model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
+
+  // declare NewtonSolver object
+  optim::NewtonSolver<double> solver;
+  // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+  solver.options.fixed_dofs = fixed_idx;
+  // solver.options.display = optim::SolverDisplay::quiet;
+
+  solver.solve([&](const VectorXd& x) { 
+                model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
+                return model.energy(x); },
+                [&model](const VectorXd& x) { return model.gradient(x); },
+                [&model](const VectorXd& x) { return model.hessian(x); }, V.reshaped<RowMajor>());
+
+  V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,

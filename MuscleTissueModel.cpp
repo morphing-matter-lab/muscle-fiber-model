@@ -179,7 +179,6 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
       double I5 = (C * Phi).trace();
       Matrix2d stress;
 
-      // if (I5 <= Phi.trace())
       if (I5 < 1e-8)
         stress = Matrix2d::Zero();
       else
