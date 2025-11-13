@@ -14,6 +14,7 @@
 #include "TinyAD/ScalarFunction.hh"
 
 #include <igl/barycentric_coordinates.h>
+#include <igl/massmatrix.h>
 #include <igl/boundary_loop.h>
 #include <igl/triangle/triangulate.h>
 
@@ -346,10 +347,9 @@ Eigen::MatrixXd theta0(const nb::DRef<Eigen::MatrixXd> &V,
 }
 
 void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
-             nb::DRef<Eigen::MatrixXd> V,
+             const nb::DRef<Eigen::MatrixXd> &V,
              const nb::DRef<Eigen::MatrixXd> &P,
              const nb::DRef<Eigen::MatrixXi> &F,
-             const std::vector<int> &fixed_idx,
              double stretch_factor,
              double poisson_ratio,
              double sigma_max,
@@ -359,26 +359,73 @@ void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
              double dt,
              int n)
 {
+  double young_modulus = 1;
+  MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
+  Phi = model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
+}
+
+void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
+                    nb::DRef<Eigen::MatrixXd> V,
+                    const nb::DRef<Eigen::MatrixXd> &P,
+                    const nb::DRef<Eigen::MatrixXi> &F,
+                    const std::vector<int> &fixed_idx,
+                    double stretch_factor,
+                    double poisson_ratio,
+                    double sigma_max,
+                    double k0,
+                    double k1,
+                    double kd,
+                    double dt_sim,
+                    double dt_phi,
+                    int n)
+{
   using namespace Eigen;
   double young_modulus = 1;
-    // declare NeohookeanMembrane object
   MuscleTissueModel model(P, F, Phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-  model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
 
-  // declare NewtonSolver object
-  optim::NewtonSolver<double> solver;
-  // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-  solver.options.fixed_dofs = fixed_idx;
-  // solver.options.display = optim::SolverDisplay::quiet;
+  // mass matrix
+  SparseMatrix<double> per_vertex_mass;
+  igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, per_vertex_mass);
 
-  solver.solve([&](const VectorXd& x) { 
-                model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
-                return model.energy(x); },
-                [&model](const VectorXd& x) { return model.gradient(x); },
-                [&model](const VectorXd& x) { return model.hessian(x); }, V.reshaped<RowMajor>());
+  // Convert the per-vertex mass matrix to a per-DOF mass matrix
+  std::vector<Triplet<double>> triplets;
+  for (int k = 0; k < per_vertex_mass.outerSize(); ++k)
+  {
+    for (SparseMatrix<double>::InnerIterator it(per_vertex_mass, k); it; ++it)
+    {
+      triplets.emplace_back(2 * it.row() + 0, 2 * it.col() + 0, it.value());
+      triplets.emplace_back(2 * it.row() + 1, 2 * it.col() + 1, it.value());
+    }
+  }
+  SparseMatrix<double> M(V.size(), V.size());
+  M.setFromTriplets(triplets.begin(), triplets.end());
 
-  V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
+  VectorXd v = VectorXd::Zero(P.size());
+  VectorXd x = V.reshaped<Eigen::RowMajor>();
+
+  for (int i = 0; i < n; ++i)
+  {
+    // Implicit Euler timestep
+    SparseMatrix<double> K = model.hessian(x);
+    filter_var(K, fixed_idx);
+    SimplicialLDLT<SparseMatrix<double>, Upper> solver;
+    solver.compute(M + dt_sim * dt_sim * K);
+
+    if (solver.info() != Eigen::Success)
+    {
+      std::cout << "Solver failed.\n";
+      return;
+    }
+    VectorXd f = -model.gradient(x);
+    filter_var(f, fixed_idx);
+    v = solver.solve(M * v + dt_sim * f);
+    x += v * dt_sim;
+
+    model.phi_ODE(x, k0, k1, kd, dt_phi, 100);
+  }
+
+  V = Map<fsim::Mat2<double>>(x.data(), V.rows(), 2);
+  Phi = model.phi_ODE(x, k0, k1, kd, dt_phi, 100);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,
@@ -652,4 +699,5 @@ NB_MODULE(fabsim_py, m)
   m.def("I5", &I5);
   m.def("theta0", &theta0);
   m.def("phi_ode", &phi_ode);
+  m.def("implicit_euler", &implicit_euler);
 }
