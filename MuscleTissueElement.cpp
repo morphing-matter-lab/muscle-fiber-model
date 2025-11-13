@@ -67,8 +67,10 @@ Eigen::Matrix2d MuscleTissueElement::stress(const Eigen::Matrix2d &F, double lam
 
   Matrix2d C = F.transpose() * F;
   double lnJ = log(C.determinant()) / 2;
-
-  return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * (1 - std::sqrt(Phi.trace() / (C * Phi).trace())) * Phi;
+  if((C * Phi).trace() > 0)
+    return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse() + sigma * (1 - std::sqrt(Phi.trace() / (C * Phi).trace())) * Phi;
+  else
+    return mu * Matrix2d::Identity() + (lambda * lnJ - mu) * C.inverse();
 }
 
 Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, double lambda, double mu, double stretch, double sigma) const
@@ -89,7 +91,9 @@ Eigen::Matrix3d MuscleTissueElement::elasticityTensor(const Eigen::Matrix2d &F, 
 
   Vector3d Phi_vec(Phi(0, 0), Phi(1, 1), Phi(0, 1));
   // _C += 4 * sigma * coeff * Phi_vec * Phi_vec.transpose();
-  _C += sigma * std::sqrt(Phi.trace()) * std::pow((C * Phi).trace(), -3 / 2.) * Phi_vec * Phi_vec.transpose();
+
+  if((C * Phi).trace() > 0)
+    _C += sigma * std::sqrt(Phi.trace()) * std::pow((C * Phi).trace(), -3 / 2.) * Phi_vec * Phi_vec.transpose();
 
   return _C;
 }
