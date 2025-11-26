@@ -250,19 +250,18 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 {
   using namespace Eigen;
 
+  // declare NewtonSolver object
+  optim::NewtonSolver<double> solver;
+  // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
+  solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
+  solver.options.fixed_dofs = fixed_idx;
+  solver.options.display = optim::SolverDisplay::quiet;
+
   const double young_modulus = 1;
   if (theta0.size() != 0 && eta.size() != 0 && phi.cols() == 1)
   {
     // declare NeohookeanMembrane object
     MuscleTissueModel model(P, F, theta0, eta, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-
-    // declare NewtonSolver object
-    optim::NewtonSolver<double> solver;
-    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-    solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
-
     solver.solve(model, V.reshaped<RowMajor>());
 
     V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
@@ -271,14 +270,6 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   {
     // declare NeohookeanMembrane object
     MuscleTissueModel model(P, F, phi, young_modulus, poisson_ratio, stretch_factor, sigma_max);
-
-    // declare NewtonSolver object
-    optim::NewtonSolver<double> solver;
-    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-    solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
-
     solver.solve(model, V.reshaped<RowMajor>());
 
     V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
@@ -287,14 +278,6 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   {
     // declare NeohookeanMembrane object
     MuscleTissueModel model(P, F, VectorXd::Zero(F.rows()), VectorXd::Zero(F.rows()), VectorXd::Ones(F.rows()), young_modulus, poisson_ratio, stretch_factor, 0.);
-
-    // declare NewtonSolver object
-    optim::NewtonSolver<double> solver;
-    // specify fixed degrees of freedom (here the 4 corners of the mesh are fixed)
-    solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
-    solver.options.fixed_dofs = fixed_idx;
-    solver.options.display = optim::SolverDisplay::quiet;
-
     solver.solve(model, V.reshaped<RowMajor>());
 
     V = Map<fsim::Mat2<double>>(solver.var().data(), V.rows(), 2);
