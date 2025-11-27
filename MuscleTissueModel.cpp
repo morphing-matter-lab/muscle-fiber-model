@@ -14,11 +14,13 @@ using namespace fsim;
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
                                      const Eigen::Ref<const fsim::Mat3<int>> F,
                                      const Eigen::Ref<const Eigen::MatrixXd> Phi,
+                                     const std::vector<int> &post_indices,
                                      double young_modulus,
                                      double poisson_ratio,
                                      double stretch,
-                                     double sigma)
-    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma)
+                                     double sigma,
+                                     double k_post)
+    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post)
 {
   _lambda = _E * _nu / (1 - std::pow(_nu, 2));
   _mu = 0.5 * _E / (1 + _nu);
@@ -26,6 +28,9 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
   _elements.reserve(F.rows());
   for (int i = 0; i < F.rows(); ++i)
     _elements.emplace_back(V, F.row(i), Phi.block<2, 2>(2 * i, 0));
+
+  for (int k : post_indices)
+    _post_anchors.emplace_back(k, V(k, 0));
 }
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -33,11 +38,13 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
                                      const Eigen::Ref<const Eigen::VectorXd> theta0,
                                      const Eigen::Ref<const Eigen::VectorXd> eta,
                                      const Eigen::Ref<const Eigen::VectorXd> phi,
+                                     const std::vector<int> &post_indices,
                                      double young_modulus,
                                      double poisson_ratio,
                                      double stretch,
-                                     double sigma)
-    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma)
+                                     double sigma,
+                                     double k_post)
+    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post)
 {
   _lambda = _E * _nu / (1 - std::pow(_nu, 2));
   _mu = 0.5 * _E / (1 + _nu);
@@ -45,6 +52,9 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
   _elements.reserve(F.rows());
   for (int i = 0; i < F.rows(); ++i)
     _elements.emplace_back(V, F.row(i), theta0(i), eta(i), phi(i));
+
+  for (int j : post_indices)
+    _post_anchors.emplace_back(j, V(j, 0));
 }
 
 Eigen::VectorXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
@@ -72,6 +82,10 @@ double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) cons
   {
     result += element.energy(X, _lambda, _mu, _stretch, _sigma);
   }
+  for (auto [j, pos] : _post_anchors)
+  {
+    result += 0.5 * _kpost * std::pow(X(2 * j) - pos, 2);
+  }
   return result;
 }
 
@@ -92,6 +106,11 @@ void MuscleTissueModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eige
 
     for (int j = 0; j < 3; ++j)
       Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
+
+    for (auto [j, pos] : _post_anchors)
+    {
+      Y(2 * j) += _kpost * (X(2 * j) - pos);
+    }
   }
 }
 
@@ -140,6 +159,11 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
           for (int l = 0; l < 2; ++l)
             for (int m = 0; m < 2; ++m)
               triplets[n * i + id++] = Triplet<double>(2 * e.idx(j) + l, 2 * e.idx(k) + m, hess(2 * j + l, 2 * k + m));
+  }
+
+  for (auto [j, pos] : _post_anchors)
+  {
+    triplets.emplace_back(2 * j, 2 * j, _kpost);
   }
 
   return triplets;

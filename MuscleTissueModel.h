@@ -24,20 +24,24 @@ public:
   MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
                     const Eigen::Ref<const fsim::Mat3<int>> F,
                     const Eigen::Ref<const Eigen::MatrixXd> Phi,
+                    const std::vector<int> &post_indices,
                     double young_modulus,
                     double poisson_ratio,
                     double stretch,
-                    double sigma);
+                    double sigma,
+                    double k_post);
 
   MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
                     const Eigen::Ref<const fsim::Mat3<int>> F,
                     const Eigen::Ref<const Eigen::VectorXd> theta0,
                     const Eigen::Ref<const Eigen::VectorXd> eta,
                     const Eigen::Ref<const Eigen::VectorXd> phi,
+                    const std::vector<int> &post_indices,
                     double young_modulus,
                     double poisson_ratio,
                     double stretch,
-                    double sigma);
+                    double sigma,
+                    double k_post);
   /**
    * energy function of this material model   f : \R^n -> \R
    * @param X  a flat vector stacking all degrees of freedom
@@ -99,5 +103,7 @@ public:
   double _lambda;
   double _mu;
   double _sigma;
+  double _kpost;
   std::vector<MuscleTissueElement> _elements;
+  std::vector<std::pair<int, double>> _post_anchors;
 };
