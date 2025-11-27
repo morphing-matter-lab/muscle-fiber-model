@@ -87,6 +87,7 @@
     "forward_list": "cpp",
     "print": "cpp",
     "*.expression": "cpp",
-    "hash_map": "cpp"
+    "hash_map": "cpp",
+    "cfenv": "cpp"
   }
 }
