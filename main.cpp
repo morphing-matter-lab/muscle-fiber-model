@@ -253,7 +253,10 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
 
   std::vector<int> fixed_idx;
   for (int k : post_vertices)
+  {
+    fixed_idx.push_back(2 * k);
     fixed_idx.push_back(2 * k + 1);
+  }
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
