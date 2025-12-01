@@ -84,7 +84,7 @@ double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) cons
   }
   for (auto [j, pos] : _post_anchors)
   {
-    result += 0.5 * _kpost * std::pow(X(2 * j) - pos, 2);
+    result += 0.5 * _kpost * (X(2 * j) - pos) * (X(2 * j) - pos);
   }
   return result;
 }
@@ -107,11 +107,9 @@ void MuscleTissueModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eige
     for (int j = 0; j < 3; ++j)
       Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
 
-    for (auto [j, pos] : _post_anchors)
-    {
-      Y(2 * j) += _kpost * (X(2 * j) - pos);
-    }
   }
+  for (auto [j, pos] : _post_anchors)
+    Y(2 * j) += _kpost * (X(2 * j) - pos);
 }
 
 // Eigen::VectorXd MuscleTissueModel::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const

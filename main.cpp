@@ -259,7 +259,7 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   optim::NewtonSolver<double> solver;
   solver.options.threshold = 1e-6; // specify how small the gradient's norm has to be
   solver.options.fixed_dofs = fixed_idx;
-  // solver.options.display = optim::SolverDisplay::quiet;
+  solver.options.display = optim::SolverDisplay::quiet;
 
   const double young_modulus = 1;
   if (theta0.size() != 0 && eta.size() != 0 && phi.cols() == 1)
