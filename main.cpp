@@ -291,6 +291,32 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   }
 }
 
+
+Eigen::VectorXd J(const nb::DRef<Eigen::MatrixXd> &V,
+                   const nb::DRef<Eigen::MatrixXd> &P,
+                   const nb::DRef<Eigen::MatrixXi> &F,
+                   double stretch_factor)
+{
+  using namespace Eigen;
+
+  // declare NeohookeanMembrane object
+  double young_modulus = 1;
+  double poisson_ratio = 0.49;
+  double sigma_max = 1;
+  MatrixXd Phi = MatrixXd::Zero(F.rows(), 2);
+  MuscleTissueModel model(P, F, Phi, std::vector<int>{}, young_modulus, poisson_ratio, stretch_factor, sigma_max, 0.);
+
+  VectorXd res(model._elements.size());
+  for (int i = 0; i < model._elements.size(); ++i)
+  {
+    Matrix2d F = model._elements[i].deformationGradient(V.reshaped<RowMajor>(), stretch_factor);
+    res(i) = F.determinant();
+  }
+
+  return res;
+}
+
+
 Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
                    const nb::DRef<Eigen::MatrixXd> &P,
                    const nb::DRef<Eigen::MatrixXi> &F,
@@ -705,6 +731,7 @@ NB_MODULE(fabsim_py, m)
   m.def("model_gradient_finite_differences", &model_gradient_finite_differences);
   m.def("update_Phi", &update_phi);
   m.def("I5", &I5);
+  m.def("J", &J);
   m.def("theta0", &theta0);
   m.def("phi_ode", &phi_ode);
   m.def("implicit_euler", &implicit_euler);
