@@ -30,7 +30,7 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
     _elements.emplace_back(V, F.row(i), Phi.block<2, 2>(2 * i, 0));
 
   for (int k : post_indices)
-    _post_anchors.emplace_back(k, V(k, 0));
+    _post_anchors.emplace_back(k, V(k, 0), V(k, 1));
 }
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -54,7 +54,7 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
     _elements.emplace_back(V, F.row(i), theta0(i), eta(i), phi(i));
 
   for (int j : post_indices)
-    _post_anchors.emplace_back(j, V(j, 0));
+    _post_anchors.emplace_back(j, V(j, 0), V(j, 1));
 }
 
 Eigen::VectorXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
@@ -82,9 +82,9 @@ double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) cons
   {
     result += element.energy(X, _lambda, _mu, _stretch, _sigma);
   }
-  for (auto [j, pos] : _post_anchors)
+  for (auto [j, x, y] : _post_anchors)
   {
-    result += 0.5 * _kpost * (X(2 * j) - pos) * (X(2 * j) - pos);
+    result += 0.5 * _kpost * ((X(2 * j) - x) * (X(2 * j) - x) + (X(2 * j + 1) - y) * (X(2 *  + 1) - y));
   }
   return result;
 }
@@ -108,8 +108,11 @@ void MuscleTissueModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eige
       Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
 
   }
-  for (auto [j, pos] : _post_anchors)
-    Y(2 * j) += _kpost * (X(2 * j) - pos);
+  for (auto [j, x, y] : _post_anchors)
+  {
+    Y(2 * j) += _kpost * (X(2 * j) - x);
+    Y(2 * j + 1) += _kpost * (X(2 * j + 1) - y);
+  }
 }
 
 // Eigen::VectorXd MuscleTissueModel::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
@@ -159,9 +162,10 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
               triplets[n * i + id++] = Triplet<double>(2 * e.idx(j) + l, 2 * e.idx(k) + m, hess(2 * j + l, 2 * k + m));
   }
 
-  for (auto [j, pos] : _post_anchors)
+  for (auto [j, x, y] : _post_anchors)
   {
     triplets.emplace_back(2 * j, 2 * j, _kpost);
+    triplets.emplace_back(2 * j + 1, 2 * j + 1, _kpost);
   }
 
   return triplets;

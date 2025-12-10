@@ -252,11 +252,11 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
 
   std::vector<int> fixed_idx;
-  for (int k : post_vertices)
-  {
-    fixed_idx.push_back(2 * k);
-    fixed_idx.push_back(2 * k + 1);
-  }
+  // for (int k : post_vertices)
+  // {
+  //   fixed_idx.push_back(2 * k);
+  //   fixed_idx.push_back(2 * k + 1);
+  // }
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -401,11 +401,11 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
   MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factor, sigma_max, k_post);
 
   std::vector<int> fixed_idx;
-  for (int k : post_vertices)
-  {
-    fixed_idx.push_back(2 * k);
-    fixed_idx.push_back(2 * k + 1);
-  }
+  // for (int k : post_vertices)
+  // {
+  //   fixed_idx.push_back(2 * k);
+  //   fixed_idx.push_back(2 * k + 1);
+  // }
 
   // mass matrix
   SparseMatrix<double> per_vertex_mass;
@@ -431,7 +431,7 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
   {
     // Implicit Euler timestep
     SparseMatrix<double> K = model.hessian(x);
-    filter_var(K, fixed_idx);
+    // filter_var(K, fixed_idx);
     SimplicialLDLT<SparseMatrix<double>, Upper> solver;
     solver.compute(M + dt_sim * dt_sim * K);
 
@@ -441,7 +441,7 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
       return;
     }
     VectorXd f = -model.gradient(x);
-    filter_var(f, fixed_idx);
+    // filter_var(f, fixed_idx);
     v = solver.solve(M * v + dt_sim * f);
     x += v * dt_sim;
 
@@ -486,10 +486,6 @@ Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
   double young_modulus = 0;
 
-  std::vector<int> fixed_idx;
-  for (int k : post_vertices)
-    fixed_idx.push_back(2 * k + 1);
-
   MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factor, sigma_max, k_post);
 
   return model.gradient(V.reshaped<RowMajor>());
@@ -508,10 +504,6 @@ double model_energy(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
   double young_modulus = 0;
 
-  std::vector<int> fixed_idx;
-  for (int k : post_vertices)
-    fixed_idx.push_back(2 * k + 1);
-
   MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factor, sigma_max, k_post);
 
   return model.energy(V.reshaped<RowMajor>());
@@ -529,10 +521,6 @@ Eigen::VectorXd model_gradient_finite_differences(nb::DRef<Eigen::MatrixXd> V,
 {
   using namespace Eigen;
   double young_modulus = 0;
-
-  std::vector<int> fixed_idx;
-  for (int k : post_vertices)
-    fixed_idx.push_back(2 * k + 1);
 
   MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factor, sigma_max, k_post);
 

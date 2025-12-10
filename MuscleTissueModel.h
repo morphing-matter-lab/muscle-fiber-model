@@ -105,5 +105,5 @@ public:
   double _sigma;
   double _kpost;
   std::vector<MuscleTissueElement> _elements;
-  std::vector<std::pair<int, double>> _post_anchors;
+  std::vector<std::tuple<int, double, double>> _post_anchors;
 };
