@@ -9,6 +9,8 @@
 #include <fsim/util/geometry.h>
 #include <TinyAD/Utils/HessianProjection.hh>
 
+#include <igl/boundary_loop.h>
+
 using namespace fsim;
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -19,8 +21,9 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
                                      double poisson_ratio,
                                      double stretch,
                                      double sigma,
-                                     double k_post)
-    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post)
+                                     double k_post,
+                                     double k_spring)
+    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post), _kspring(k_spring)
 {
   _lambda = _E * _nu / (1 - std::pow(_nu, 2));
   _mu = 0.5 * _E / (1 + _nu);
@@ -31,6 +34,18 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
 
   for (int k : post_indices)
     _post_anchors.emplace_back(k, V(k, 0), V(k, 1));
+
+  std::vector<std::vector<Eigen::Index>> L;
+  igl::boundary_loop(F, L);
+
+  for(auto &loop: L)
+  {
+    int n = loop.size();
+    for(int i = 0; i < n; ++i)
+    {
+      _springs.emplace_back(loop[i], loop[(i+1)%n]);
+    }
+  }
 }
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -43,8 +58,9 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
                                      double poisson_ratio,
                                      double stretch,
                                      double sigma,
-                                     double k_post)
-    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post)
+                                     double k_post, 
+                                     double k_spring)
+    : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post), _kspring(k_spring)
 {
   _lambda = _E * _nu / (1 - std::pow(_nu, 2));
   _mu = 0.5 * _E / (1 + _nu);
@@ -86,6 +102,12 @@ double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) cons
   {
     result += 0.5 * _kpost * ((X(2 * j) - x) * (X(2 * j) - x) + (X(2 * j + 1) - y) * (X(2 *  + 1) - y));
   }
+  // Surface tension
+  for(const auto &[i, j]: _springs)
+  {
+    result += _kspring * (X.segment<2>(2 * i) - X.segment<2>(2 * j)).squaredNorm();
+  }
+
   return result;
 }
 
@@ -112,6 +134,13 @@ void MuscleTissueModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eige
   {
     Y(2 * j) += _kpost * (X(2 * j) - x);
     Y(2 * j + 1) += _kpost * (X(2 * j + 1) - y);
+  }
+
+  // Surface tension
+  for(const auto &[i, j]: _springs)
+  {
+    Y.segment<2>(2 * i) += _kspring * (X.segment<2>(2 * i) - X.segment<2>(2 * j));
+    Y.segment<2>(2 * j) += _kspring * (X.segment<2>(2 * j) - X.segment<2>(2 * i));
   }
 }
 
@@ -166,6 +195,22 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
   {
     triplets.emplace_back(2 * j, 2 * j, _kpost);
     triplets.emplace_back(2 * j + 1, 2 * j + 1, _kpost);
+  }
+
+  // Surface tension
+  for(const auto &[i, j]: _springs)
+  {
+    triplets.emplace_back(2 * i, 2 * i, _kspring);
+    triplets.emplace_back(2 * i + 1, 2 * i + 1, _kspring);
+
+    triplets.emplace_back(2 * j, 2 * j, _kspring);
+    triplets.emplace_back(2 * j + 1, 2 * j + 1, _kspring);
+
+    triplets.emplace_back(2 * i, 2 * j, -_kspring);
+    triplets.emplace_back(2 * i + 1, 2 * j + 1, -_kspring);
+
+    triplets.emplace_back(2 * j, 2 * i, -_kspring);
+    triplets.emplace_back(2 * j + 1, 2 * i + 1, -_kspring);
   }
 
   return triplets;

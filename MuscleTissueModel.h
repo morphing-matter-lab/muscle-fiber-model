@@ -29,7 +29,8 @@ public:
                     double poisson_ratio,
                     double stretch,
                     double sigma,
-                    double k_post);
+                    double k_post,
+                    double k_spring);
 
   MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
                     const Eigen::Ref<const fsim::Mat3<int>> F,
@@ -41,7 +42,8 @@ public:
                     double poisson_ratio,
                     double stretch,
                     double sigma,
-                    double k_post);
+                    double k_post,
+                    double k_spring);
   /**
    * energy function of this material model   f : \R^n -> \R
    * @param X  a flat vector stacking all degrees of freedom
@@ -104,6 +106,8 @@ public:
   double _mu;
   double _sigma;
   double _kpost;
+  double _kspring;
   std::vector<MuscleTissueElement> _elements;
   std::vector<std::tuple<int, double, double>> _post_anchors;
+  std::vector<std::tuple<int, int>> _springs;
 };
