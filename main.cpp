@@ -447,11 +447,11 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
     v = solver.solve(M * v + dt_sim * f);
     x += v * dt_sim;
 
-    model.phi_ODE(x, k0, k1, kd, dt_phi, 100);
+    model.phi_ODE(x, k0, k1, kd, dt_phi, 1);
   }
 
   V = Map<fsim::Mat2<double>>(x.data(), V.rows(), 2);
-  Phi = model.phi_ODE(x, k0, k1, kd, dt_phi, 100);
+  Phi = model.phi_ODE(x, k0, k1, kd, dt_phi, 1);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,
