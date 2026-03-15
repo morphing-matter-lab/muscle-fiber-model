@@ -1,6 +1,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/eigen/dense.h>
+#include <nanobind/eigen/sparse.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/string.h>
 
@@ -253,11 +254,11 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   using namespace Eigen;
 
   std::vector<int> fixed_idx;
-  // for (int k : post_vertices)
-  // {
-  //   fixed_idx.push_back(2 * k);
-  //   fixed_idx.push_back(2 * k + 1);
-  // }
+  for (int k : post_vertices)
+  {
+    fixed_idx.push_back(2 * k);
+    fixed_idx.push_back(2 * k + 1);
+  }
 
   // declare NewtonSolver object
   optim::NewtonSolver<double> solver;
@@ -292,11 +293,10 @@ void simulate_membrane(nb::DRef<Eigen::MatrixXd> V,
   }
 }
 
-
 Eigen::VectorXd J(const nb::DRef<Eigen::MatrixXd> &V,
-                   const nb::DRef<Eigen::MatrixXd> &P,
-                   const nb::DRef<Eigen::MatrixXi> &F,
-                   double stretch_factor)
+                  const nb::DRef<Eigen::MatrixXd> &P,
+                  const nb::DRef<Eigen::MatrixXi> &F,
+                  double stretch_factor)
 {
   using namespace Eigen;
 
@@ -316,7 +316,6 @@ Eigen::VectorXd J(const nb::DRef<Eigen::MatrixXd> &V,
 
   return res;
 }
-
 
 Eigen::VectorXd I5(const nb::DRef<Eigen::MatrixXd> &V,
                    const nb::DRef<Eigen::MatrixXd> &P,
@@ -381,37 +380,43 @@ void phi_ode(nb::DRef<Eigen::MatrixXd> Phi,
   Phi = model.phi_ODE(V.reshaped<Eigen::RowMajor>(), k0, k1, kd, dt, n);
 }
 
-void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
-                    nb::DRef<Eigen::MatrixXd> V,
-                    const nb::DRef<Eigen::MatrixXd> &P,
-                    const nb::DRef<Eigen::MatrixXi> &F,
-                    const std::vector<int> &post_vertices,
-                    double stretch_factor,
-                    double poisson_ratio,
-                    double sigma_max,
-                    double k0,
-                    double k1,
-                    double kd,
-                    double dt_sim,
-                    double dt_phi,
-                    double k_post,
-                    int n,
-                    double k_tension)
+void phi_ode_sqrt(nb::DRef<Eigen::MatrixXd> Phi,
+                  const nb::DRef<Eigen::MatrixXd> &V,
+                  const nb::DRef<Eigen::MatrixXd> &P,
+                  const nb::DRef<Eigen::MatrixXi> &F,
+                  double stretch_factor,
+                  double poisson_ratio,
+                  double sigma_max,
+                  double k0,
+                  double k1,
+                  double k2,
+                  double kd,
+                  double dt,
+                  int n)
 {
   using namespace Eigen;
+
   double young_modulus = 1;
-  MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factor, sigma_max, k_post, k_tension);
+  MuscleTissueModel model(P, F, Phi, std::vector<int>{}, young_modulus, poisson_ratio, stretch_factor, sigma_max, 0., 0.);
+  Phi = model.phi_ODE_sqrt(V.reshaped<Eigen::RowMajor>(), k0, k1, k2, kd, dt, n);
+}
+
+std::tuple<Eigen::SparseMatrix<double>, std::vector<int>> make_mass_matrix_and_fixed_idx(const nb::DRef<Eigen::MatrixXd> &P,
+                                                                                         const nb::DRef<Eigen::MatrixXi> &F,
+                                                                                         const std::vector<int> &post_vertices)
+{
+  using namespace Eigen;
 
   std::vector<int> fixed_idx;
-  // for (int k : post_vertices)
-  // {
-  //   fixed_idx.push_back(2 * k);
-  //   fixed_idx.push_back(2 * k + 1);
-  // }
+  for (int k : post_vertices)
+  {
+    fixed_idx.push_back(2 * k);
+    fixed_idx.push_back(2 * k + 1);
+  }
 
   // mass matrix
   SparseMatrix<double> per_vertex_mass;
-  igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, per_vertex_mass);
+  igl::massmatrix(P, F, igl::MASSMATRIX_TYPE_DEFAULT, per_vertex_mass);
 
   // Convert the per-vertex mass matrix to a per-DOF mass matrix
   std::vector<Triplet<double>> triplets;
@@ -423,19 +428,72 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
       triplets.emplace_back(2 * it.row() + 1, 2 * it.col() + 1, it.value());
     }
   }
-  SparseMatrix<double> M(V.size(), V.size());
+  SparseMatrix<double> M(P.size(), P.size());
   M.setFromTriplets(triplets.begin(), triplets.end());
 
-  VectorXd v = VectorXd::Zero(P.size());
-  VectorXd x = V.reshaped<Eigen::RowMajor>();
+  return std::make_tuple(M, fixed_idx);
+}
 
+void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
+                    nb::DRef<Eigen::MatrixXd> X,
+                    nb::DRef<Eigen::VectorXd> v,
+                    const nb::DRef<Eigen::MatrixXd> &P,
+                    const nb::DRef<Eigen::MatrixXi> &F,
+                    const std::vector<int> &post_vertices,
+                    const std::vector<double> stretch_factors,
+                    double poisson_ratio,
+                    double sigma_max,
+                    double k0,
+                    double k1,
+                    double kd,
+                    double dt,
+                    // double k_post,
+                    int n
+                    // double k_tension
+)
+{
+  using namespace Eigen;
+  double young_modulus = 1;
+  MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factors[0], sigma_max, 0, 0);
+
+  VectorXd x = X.reshaped<Eigen::RowMajor>();
+
+  std::vector<int> fixed_idx;
+  for (int k : post_vertices)
+  {
+    fixed_idx.push_back(2 * k);
+    fixed_idx.push_back(2 * k + 1);
+  }
+
+  // mass matrix
+  SparseMatrix<double> per_vertex_mass;
+  igl::massmatrix(P, F, igl::MASSMATRIX_TYPE_DEFAULT, per_vertex_mass);
+
+  // Convert the per-vertex mass matrix to a per-DOF mass matrix
+  std::vector<Triplet<double>> triplets;
+  for (int k = 0; k < per_vertex_mass.outerSize(); ++k)
+  {
+    for (SparseMatrix<double>::InnerIterator it(per_vertex_mass, k); it; ++it)
+    {
+      triplets.emplace_back(2 * it.row() + 0, 2 * it.col() + 0, it.value());
+      triplets.emplace_back(2 * it.row() + 1, 2 * it.col() + 1, it.value());
+    }
+  }
+  SparseMatrix<double> M(P.size(), P.size());
+  M.setFromTriplets(triplets.begin(), triplets.end());
+
+  SimplicialLDLT<SparseMatrix<double>, Upper> solver;
   for (int i = 0; i < n; ++i)
   {
+    model.setStretch(stretch_factors[i]);
+
     // Implicit Euler timestep
     SparseMatrix<double> K = model.hessian(x);
-    // filter_var(K, fixed_idx);
-    SimplicialLDLT<SparseMatrix<double>, Upper> solver;
-    solver.compute(M + dt_sim * dt_sim * K);
+    filter_var(K, fixed_idx);
+
+    if (i == 0)
+      solver.analyzePattern(M + dt * dt * K);
+    solver.factorize(M + dt * dt * K);
 
     if (solver.info() != Eigen::Success)
     {
@@ -443,15 +501,89 @@ void implicit_euler(nb::DRef<Eigen::MatrixXd> Phi,
       return;
     }
     VectorXd f = -model.gradient(x);
-    // filter_var(f, fixed_idx);
-    v = solver.solve(M * v + dt_sim * f);
-    x += v * dt_sim;
+    filter_var(f, fixed_idx);
+    v = solver.solve(M * v + dt * f);
+    x += v * dt;
 
-    model.phi_ODE(x, k0, k1, kd, dt_phi, 1);
+    Phi = model.phi_ODE(x, k0, k1, kd, dt, 1);
   }
 
-  V = Map<fsim::Mat2<double>>(x.data(), V.rows(), 2);
-  Phi = model.phi_ODE(x, k0, k1, kd, dt_phi, 1);
+  X = Map<fsim::Mat2<double>>(x.data(), X.rows(), 2);
+}
+
+void implicit_euler_sqrt(nb::DRef<Eigen::MatrixXd> Phi,
+                         nb::DRef<Eigen::MatrixXd> X,
+                         nb::DRef<Eigen::VectorXd> v,
+                         const nb::DRef<Eigen::MatrixXd> &P,
+                         const nb::DRef<Eigen::MatrixXi> &F,
+                         const std::vector<int> &post_vertices,
+                         const std::vector<double> stretch_factors,
+                         double poisson_ratio,
+                         double sigma_max,
+                         double k0,
+                         double k1,
+                         double k2,
+                         double kd,
+                         double dt,
+                         int n)
+{
+  using namespace Eigen;
+  double young_modulus = 1;
+  MuscleTissueModel model(P, F, Phi, post_vertices, young_modulus, poisson_ratio, stretch_factors[0], sigma_max, 0, 0);
+
+  VectorXd x = X.reshaped<Eigen::RowMajor>();
+
+  std::vector<int> fixed_idx;
+  for (int k : post_vertices)
+  {
+    fixed_idx.push_back(2 * k);
+    fixed_idx.push_back(2 * k + 1);
+  }
+
+  // mass matrix
+  SparseMatrix<double> per_vertex_mass;
+  igl::massmatrix(P, F, igl::MASSMATRIX_TYPE_DEFAULT, per_vertex_mass);
+
+  // Convert the per-vertex mass matrix to a per-DOF mass matrix
+  std::vector<Triplet<double>> triplets;
+  for (int k = 0; k < per_vertex_mass.outerSize(); ++k)
+  {
+    for (SparseMatrix<double>::InnerIterator it(per_vertex_mass, k); it; ++it)
+    {
+      triplets.emplace_back(2 * it.row() + 0, 2 * it.col() + 0, it.value());
+      triplets.emplace_back(2 * it.row() + 1, 2 * it.col() + 1, it.value());
+    }
+  }
+  SparseMatrix<double> M(P.size(), P.size());
+  M.setFromTriplets(triplets.begin(), triplets.end());
+
+  SimplicialLDLT<SparseMatrix<double>, Upper> solver;
+  for (int i = 0; i < n; ++i)
+  {
+    model.setStretch(stretch_factors[i]);
+
+    // Implicit Euler timestep
+    SparseMatrix<double> K = model.hessian(x);
+    filter_var(K, fixed_idx);
+
+    if (i == 0)
+      solver.analyzePattern(M + dt * dt * K);
+    solver.factorize(M + dt * dt * K);
+
+    if (solver.info() != Eigen::Success)
+    {
+      std::cout << "Solver failed.\n";
+      return;
+    }
+    VectorXd f = -model.gradient(x);
+    filter_var(f, fixed_idx);
+    v = solver.solve(M * v + dt * f);
+    x += v * dt;
+
+    Phi = model.phi_ODE_sqrt(x, k0, k1, k2, kd, dt, 1);
+  }
+
+  X = Map<fsim::Mat2<double>>(x.data(), X.rows(), 2);
 }
 
 void update_phi(nb::DRef<Eigen::MatrixXd> V,
@@ -494,14 +626,14 @@ Eigen::VectorXd model_gradient(nb::DRef<Eigen::MatrixXd> V,
 }
 
 double model_energy(nb::DRef<Eigen::MatrixXd> V,
-                               const nb::DRef<Eigen::MatrixXd> &P,
-                               const nb::DRef<Eigen::MatrixXi> &F,
-                               const nb::DRef<Eigen::MatrixXd> &Phi,
-                               const std::vector<int> &post_vertices,
-                               double stretch_factor,
-                               double poisson_ratio,
-                               double sigma_max,
-                               double k_post)
+                    const nb::DRef<Eigen::MatrixXd> &P,
+                    const nb::DRef<Eigen::MatrixXi> &F,
+                    const nb::DRef<Eigen::MatrixXd> &Phi,
+                    const std::vector<int> &post_vertices,
+                    double stretch_factor,
+                    double poisson_ratio,
+                    double sigma_max,
+                    double k_post)
 {
   using namespace Eigen;
   double young_modulus = 0;
@@ -703,7 +835,7 @@ NB_MODULE(fabsim_py, m)
   m.def("compute_stretch_angles", &compute_stretch_angles);
   m.def("directional_fiber_stress", &directional_fiber_stress);
   m.def("directional_strain", &directional_strain);
-  m.def("fiber_stress", &fiber_stress, "V"_a, "P"_a, "F"_a, "n"_a, "e0"_a = 1.2e-1, "e1"_a = 1.7e-1);
+  m.def("fiber_stress", &fiber_stress);
   m.def("polymer_fraction_one_step", &polymer_fraction_one_step);
   m.def("polymer_fraction_steady_state", &polymer_fraction_steady_state);
   m.def("transfer_data_to_3D_mesh", &transfer_data_to_3D_mesh);
@@ -724,5 +856,8 @@ NB_MODULE(fabsim_py, m)
   m.def("J", &J);
   m.def("theta0", &theta0);
   m.def("phi_ode", &phi_ode);
+  m.def("phi_ode_sqrt", &phi_ode_sqrt);
   m.def("implicit_euler", &implicit_euler);
+  m.def("implicit_euler_sqrt", &implicit_euler_sqrt);
+  m.def("make_mass_matrix_and_fixed_idx2", &make_mass_matrix_and_fixed_idx);
 }

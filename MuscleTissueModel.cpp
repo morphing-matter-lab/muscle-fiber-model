@@ -9,7 +9,7 @@
 #include <fsim/util/geometry.h>
 #include <TinyAD/Utils/HessianProjection.hh>
 
-#include <igl/boundary_loop.h>
+#include <igl/boundary_facets.h>
 
 using namespace fsim;
 
@@ -35,17 +35,8 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
   for (int k : post_indices)
     _post_anchors.emplace_back(k, V(k, 0), V(k, 1));
 
-  std::vector<std::vector<Eigen::Index>> L;
-  igl::boundary_loop(F, L);
-
-  for(auto &loop: L)
-  {
-    int n = loop.size();
-    for(int i = 0; i < n; ++i)
-    {
-      _springs.emplace_back(loop[i], loop[(i+1)%n]);
-    }
-  }
+  Eigen::VectorXi K;
+  igl::boundary_facets(F, _L, _J, K);
 }
 
 MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> V,
@@ -58,7 +49,7 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
                                      double poisson_ratio,
                                      double stretch,
                                      double sigma,
-                                     double k_post, 
+                                     double k_post,
                                      double k_spring)
     : _E(young_modulus), _nu(poisson_ratio), _stretch(stretch), nV(V.rows()), _sigma(sigma), _kpost(k_post), _kspring(k_spring)
 {
@@ -71,6 +62,9 @@ MuscleTissueModel::MuscleTissueModel(const Eigen::Ref<const fsim::Mat2<double>> 
 
   for (int j : post_indices)
     _post_anchors.emplace_back(j, V(j, 0), V(j, 1));
+
+  Eigen::VectorXi K;
+  igl::boundary_facets(F, _L, _J, K);
 }
 
 Eigen::VectorXd MuscleTissueModel::updatePhi(const Eigen::Ref<const Eigen::VectorXd> X)
@@ -98,15 +92,15 @@ double MuscleTissueModel::energy(const Eigen::Ref<const Eigen::VectorXd> X) cons
   {
     result += element.energy(X, _lambda, _mu, _stretch, _sigma);
   }
-  for (auto [j, x, y] : _post_anchors)
-  {
-    result += 0.5 * _kpost * ((X(2 * j) - x) * (X(2 * j) - x) + (X(2 * j + 1) - y) * (X(2 *  + 1) - y));
-  }
-  // Surface tension
-  for(const auto &[i, j]: _springs)
-  {
-    result += _kspring * (X.segment<2>(2 * i) - X.segment<2>(2 * j)).squaredNorm();
-  }
+  // for (auto [j, x, y] : _post_anchors)
+  // {
+  //   result += 0.5 * _kpost * ((X(2 * j) - x) * (X(2 * j) - x) + (X(2 * j + 1) - y) * (X(2 *  + 1) - y));
+  // }
+  // // Surface tension
+  // for(int i = 0; i < _L.rows(); ++i)
+  // {
+  //   result += _kspring * (X.segment<2>(2 * _L(i, 0)) - X.segment<2>(2 * _L(i, 1))).squaredNorm();
+  // }
 
   return result;
 }
@@ -128,20 +122,19 @@ void MuscleTissueModel::gradient(const Eigen::Ref<const Eigen::VectorXd> X, Eige
 
     for (int j = 0; j < 3; ++j)
       Y.segment<2>(2 * element.idx(j)) += grad.segment<2>(2 * j);
+  }
+  // for (auto [j, x, y] : _post_anchors)
+  // {
+  //   Y(2 * j) += _kpost * (X(2 * j) - x);
+  //   Y(2 * j + 1) += _kpost * (X(2 * j + 1) - y);
+  // }
 
-  }
-  for (auto [j, x, y] : _post_anchors)
-  {
-    Y(2 * j) += _kpost * (X(2 * j) - x);
-    Y(2 * j + 1) += _kpost * (X(2 * j + 1) - y);
-  }
-
-  // Surface tension
-  for(const auto &[i, j]: _springs)
-  {
-    Y.segment<2>(2 * i) += _kspring * (X.segment<2>(2 * i) - X.segment<2>(2 * j));
-    Y.segment<2>(2 * j) += _kspring * (X.segment<2>(2 * j) - X.segment<2>(2 * i));
-  }
+  // // Surface tension
+  // for(int i = 0; i < _L.rows(); ++i)
+  // {
+  //   Y.segment<2>(2 * _L(i, 0)) += _kspring * (X.segment<2>(2 * _L(i, 0)) - X.segment<2>(2 * _L(i, 1)));
+  //   Y.segment<2>(2 * _L(i, 1)) += _kspring * (X.segment<2>(2 * _L(i, 1)) - X.segment<2>(2 * _L(i, 0)));
+  // }
 }
 
 // Eigen::VectorXd MuscleTissueModel::gradient_derivative_sensitivity(const Eigen::Ref<const Eigen::VectorXd> X, double stretch) const
@@ -191,27 +184,27 @@ std::vector<Eigen::Triplet<double>> MuscleTissueModel::hessianTriplets(const Eig
               triplets[n * i + id++] = Triplet<double>(2 * e.idx(j) + l, 2 * e.idx(k) + m, hess(2 * j + l, 2 * k + m));
   }
 
-  for (auto [j, x, y] : _post_anchors)
-  {
-    triplets.emplace_back(2 * j, 2 * j, _kpost);
-    triplets.emplace_back(2 * j + 1, 2 * j + 1, _kpost);
-  }
+  // for (auto [j, x, y] : _post_anchors)
+  // {
+  //   triplets.emplace_back(2 * j, 2 * j, _kpost);
+  //   triplets.emplace_back(2 * j + 1, 2 * j + 1, _kpost);
+  // }
 
-  // Surface tension
-  for(const auto &[i, j]: _springs)
-  {
-    triplets.emplace_back(2 * i, 2 * i, _kspring);
-    triplets.emplace_back(2 * i + 1, 2 * i + 1, _kspring);
+  // // Surface tension
+  // for(int i = 0; i < _L.rows(); ++i)
+  // {
+  //   triplets.emplace_back(2 * _L(i, 0), 2 * _L(i, 0), _kspring);
+  //   triplets.emplace_back(2 * _L(i, 0) + 1, 2 * _L(i, 0) + 1, _kspring);
 
-    triplets.emplace_back(2 * j, 2 * j, _kspring);
-    triplets.emplace_back(2 * j + 1, 2 * j + 1, _kspring);
+  //   triplets.emplace_back(2 * _L(i, 1), 2 * _L(i, 1), _kspring);
+  //   triplets.emplace_back(2 * _L(i, 1) + 1, 2 * _L(i, 1) + 1, _kspring);
 
-    triplets.emplace_back(2 * i, 2 * j, -_kspring);
-    triplets.emplace_back(2 * i + 1, 2 * j + 1, -_kspring);
+  //   triplets.emplace_back(2 * _L(i, 0), 2 * _L(i, 1), -_kspring);
+  //   triplets.emplace_back(2 * _L(i, 0) + 1, 2 * _L(i, 1) + 1, -_kspring);
 
-    triplets.emplace_back(2 * j, 2 * i, -_kspring);
-    triplets.emplace_back(2 * j + 1, 2 * i + 1, -_kspring);
-  }
+  //   triplets.emplace_back(2 * _L(i, 1), 2 * _L(i, 0), -_kspring);
+  //   triplets.emplace_back(2 * _L(i, 1) + 1, 2 * _L(i, 0) + 1, -_kspring);
+  // }
 
   return triplets;
 }
@@ -234,13 +227,20 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
 {
   using namespace Eigen;
 
-  const double phi_f = 0.7;
+  // const double phi_f = 0.7;
+
+  MatrixXd stress_boundary = MatrixXd::Zero(2 * _elements.size(), 2);
+  // for(int i = 0; i < _L.rows(); ++i)
+  // {
+  //   stress_boundary.block<2,2>(2 * _J(i), 0) = _kspring * (X.segment<2>(2 * _L(i, 1)) - X.segment<2>(2 * _L(i,0))) * (X.segment<2>(2 * _L(i, 1)) - X.segment<2>(2 * _L(i,0))).normalized().transpose();
+  // }
 
 #pragma omp parallel for
   for (int i = 0; i < _elements.size(); ++i)
   {
     Matrix2d F = _elements[i].deformationGradient(X, _stretch);
     Matrix2d C = F.transpose() * F;
+
     for (int k = 0; k < n; ++k)
     {
       Matrix2d Phi = _elements[i].Phi;
@@ -248,14 +248,58 @@ Eigen::MatrixXd MuscleTissueModel::phi_ODE(const Eigen::Ref<const Eigen::VectorX
 
       // compute stress
       double I5 = (C * Phi).trace();
-      Matrix2d stress;
+      Matrix2d stress = stress_boundary.block<2, 2>(2 * i, 0);
 
-      if (I5 < 1e-8)
-        stress = Matrix2d::Zero();
-      else
+      if (I5 > 1e-8)
+        stress += _sigma * (1 - std::sqrt(Phi.trace() / I5)) * F * Phi * F.transpose();
+
+      Matrix2d dPhi_dt = phi_m * (k0 / 2 * Matrix2d::Identity() + k1 * stress) - kd * Phi;
+
+      _elements[i].Phi += dt * dPhi_dt;
+    }
+  }
+
+  MatrixXd Phis(2 * _elements.size(), 2);
+  for (int i = 0; i < _elements.size(); ++i)
+    Phis.block<2, 2>(2 * i, 0) = _elements[i].Phi;
+
+  return Phis;
+}
+
+Eigen::MatrixXd MuscleTissueModel::phi_ODE_sqrt(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double k2, double kd, double dt, int n)
+{
+  using namespace Eigen;
+
+#pragma omp parallel for
+  for (int i = 0; i < _elements.size(); ++i)
+  {
+    Matrix2d F = _elements[i].deformationGradient(X, _stretch);
+    Matrix2d C = F.transpose() * F;
+
+    for (int k = 0; k < n; ++k)
+    {
+      Matrix2d Phi = _elements[i].Phi;
+      double phi_f = Phi.trace();
+      double phi_g = 0.05 - phi_f;
+
+      // compute stress
+      double I5 = 0;
+      if (phi_f > 0)
+       I5 = (C * Phi).trace() / phi_f;
+      Matrix2d stress = Matrix2d::Zero();
+
+      if (I5 > 1e-8)
+      {
         stress = _sigma * (1 - std::sqrt(Phi.trace() / I5)) * F * Phi * F.transpose();
-
-      Matrix2d dPhi_dt = phi_m / phi_f * (k0 / 2 * Matrix2d::Identity() + k1 * stress) - kd * Phi;
+        double t = stress.trace();
+        if(stress.determinant() > 0)
+        {
+          double d = std::sqrt(stress.determinant());
+          if (t + 2 * d > 0)
+            stress = (stress + d * Matrix2d::Identity()) / std::sqrt(t + 2 * d);
+        }
+      }
+      Matrix2d dPhi_dt = phi_g * (k0 / 2 * Matrix2d::Identity() + k1 * stress + k2 * stress * stress) - kd * Phi;
 
       _elements[i].Phi += dt * dPhi_dt;
     }

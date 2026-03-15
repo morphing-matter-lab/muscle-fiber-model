@@ -1,4 +1,5 @@
 #include "FiberStress.h"
+#include "MuscleTissueModel.h"
 
 namespace nb = nanobind;
 
@@ -63,33 +64,29 @@ Eigen::MatrixXd directional_strain(const Eigen::MatrixXd &V, const Eigen::Matrix
   return strain;
 }
 
-Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXd &F, int n, double e0, double e1)
+Eigen::MatrixXd fiber_stress(const Eigen::MatrixXd &Phi, const Eigen::MatrixXd &V, const Eigen::MatrixXd &P, const Eigen::MatrixXi &F, double stretch_factor, double sigma_max)
 {
   using namespace Eigen;
 
-  MatrixXd stress(F.rows(), n);
+  double young_modulus = 1;
+  MuscleTissueModel model(P, F, Phi, std::vector<int>{}, young_modulus, 0.49, stretch_factor, sigma_max, 0, 0);
+
+  MatrixXd stress(2 * F.rows(), 2);
 #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads() - 1)
   for (int i = 0; i < F.rows(); ++i)
   {
-    Matrix2d Ds;
-    Ds.col(0) = V.block<1, 2>(F(i, 1), 0) - V.block<1, 2>(F(i, 0), 0);
-    Ds.col(1) = V.block<1, 2>(F(i, 2), 0) - V.block<1, 2>(F(i, 0), 0);
-    Matrix2d R;
-    R.col(0) = P.block<1, 2>(F(i, 1), 0) - P.block<1, 2>(F(i, 0), 0);
-    R.col(1) = P.block<1, 2>(F(i, 2), 0) - P.block<1, 2>(F(i, 0), 0);
+    Matrix2d F = model._elements[i].deformationGradient(V.reshaped<RowMajor>(), stretch_factor);
+    Matrix2d C = F.transpose() * F;
 
-    Matrix2d def_gradient = Ds * R.inverse();
+    Matrix2d Phi = model._elements[i].Phi;
+    double phi_m = 0.05 - Phi.trace();
 
-    for (int j = 0; j < n; ++j)
+    // compute stress
+    double I5 = (C * Phi).trace();
+
+    if (I5 > 1e-8)
     {
-      double theta = j * 3.14159 / n;
-      Vector2d Fu = def_gradient * Vector2d(cos(theta), sin(theta));
-      double strain = 0.5 * (Fu.dot(Fu) - 1);
-
-      stress(i, j) = std::exp(-std::pow(strain / e0, 2));
-
-      if (strain > 0)
-        stress(i, j) += std::pow(strain / e1, 2);
+      stress.block<2,2>(2 * i, 0) =  sigma_max * (1 - std::sqrt(Phi.trace() / I5)) * F * Phi * F.transpose();
     }
   }
   return stress;
@@ -132,7 +129,6 @@ Eigen::MatrixXd polymer_fraction_steady_state(const Eigen::MatrixXd &stress, dou
 
   return polymer_fraction;
 }
-
 
 Eigen::MatrixXd polymer_fraction_reduced(const Eigen::MatrixXd &stress, double k1, double kd, double frac_f, double frac_s)
 {
