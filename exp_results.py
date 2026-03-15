@@ -30,74 +30,74 @@ def to_8bit_rgb(x):
 def from_8bit_rgb(R, G, B):
     return R + G / 256. + B / 256. / 256.
 
+def plt_eta_theta(eta, theta, mask):
+    fig, ax = plt.subplots()
+
+    im = ax.imshow(eta, cmap='turbo', origin='lower', vmin=0, vmax=0.5, extent=[0, width / world_coords_to_px, 0, height / world_coords_to_px], aspect='equal', alpha=mask)
+    fig.colorbar(im, ax=ax, label=r"$\eta$")
+    fig.canvas.manager.full_screen_toggle()
+    ax.axis('off')
+
+    # ax.title("Measured compaction (3.5h)")
+    # ax.tight_layout()
+
+    X, Y = np.meshgrid(np.arange(0, width, 149), np.arange(0, height, 149))
+    U = np.cos(theta) * mask
+    V = np.sin(theta) * mask
+
+    q = ax.quiver(X / world_coords_to_px,  Y / world_coords_to_px, U[Y, X], V[Y, X], color="white", headlength=0, headaxislength=0, headwidth=0, scale=50, units='width')
+
+    scalebar = AnchoredSizeBar(
+        ax.transData,
+        size=1.0,                 # 1 cm in data units
+        label="1 mm",
+        loc="lower center",
+        pad=0.3,
+        color="black",
+        frameon=False,
+        size_vertical=0.02,
+        fontproperties=fm.FontProperties(size=10),
+        bbox_to_anchor=(0.9, -0.3),      # x centered, y below axes
+        bbox_transform=ax.transAxes  # interpret anchor in axes coords
+    )
+
+    ax.add_artist(scalebar)
+    # plt.show()
+
 
 # img = np.array(cv2.imread('data/3 post/orientation_dispersion_mask.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
-img = np.array(cv2.imread(data_path + 'orientation_dispersion_mask.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
-converted = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2])
+mask_img = np.array(cv2.imread(data_path + 'mask.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
+mask = (mask_img[:,:] > 128).astype(np.float32)
+height, width = mask_img.shape
 
-eta = converted * 0.5 / 256
+eta = np.zeros((height, width))
+alpha = np.zeros((height, width))
+z = np.zeros((height, width), dtype=np.complex128)
 
-print(np.min(converted), np.max(converted))
-print(np.min(eta), np.max(eta))
-height, width, _ = img.shape
+for i in range(1,5):
+    if i == 3:
+        continue
+    mask_img = np.array(cv2.imread(f"{data_path}mask{i}.png", cv2.IMREAD_UNCHANGED), dtype=np.float32)
+    mask_i = (mask_img[:,:] > 128).astype(np.float32)
 
-fig, ax = plt.subplots()
+    input_img = np.array(cv2.imread(data_path + f'orientation{i}_dispersion_new.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
+    eta_i = from_8bit_rgb(input_img[:,:,0], input_img[:,:,1], input_img[:,:,2]) * 0.5 / 256
 
-im = ax.imshow(eta, cmap='turbo', origin='lower', vmin=0, vmax=0.5, extent=[0, width / world_coords_to_px, 0, height / world_coords_to_px], aspect='equal', alpha=img[:,:,3] / 255)
-fig.colorbar(im, ax=ax, label=r"$\eta$")
-ax.axis('off')
+    eta += eta_i * input_img[:,:,3]
+    alpha += input_img[:,:,3]
 
-# ax.title("Measured compaction (3.5h)")
-# ax.tight_layout()
+    input_img = np.array(cv2.imread(data_path + f'orientation{i}_mean.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
+    theta_i = from_8bit_rgb(input_img[:,:,0], input_img[:,:,1], input_img[:,:,2]) * np.pi / 256 + np.pi / 2
 
-# img = np.array(cv2.imread('data/3 post/orientation_mean_mask.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
-img = np.array(cv2.imread(data_path + 'orientation_mean_mask.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
-converted = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2])
+    z += (np.cos(theta_i) + 1j * np.sin(theta_i)) * input_img[:,:,3]
 
+    plt_eta_theta(eta_i, theta_i, mask_i)
+    plt.savefig(f"Sample{i}_new.pdf", dpi=150)
 
-shape = converted.shape
-print(converted.shape)
-down = cv2.resize(
-    converted,
-    None,
-    fx=0.1,
-    fy=0.1,
-    interpolation=cv2.INTER_AREA
-)
-print(down.shape)
-converted = result = cv2.resize(
-    down,
-    (shape[1], shape[0]),
-    interpolation=cv2.INTER_NEAREST
-)
-print(converted.shape)
+eta /= np.clip(alpha, a_min=1, a_max=1000000)
+eta = eta * mask
 
+theta = np.mod(np.angle(z), np.pi)
 
-# theta = converted * np.pi / 256 + np.pi / 2 - 152.1 / 180 * np.pi
-theta = converted * np.pi / 256 + np.pi / 2
-# theta = converted * np.pi / 256
-
-
-X, Y = np.meshgrid(np.arange(0, width, 149), np.arange(0, height, 149))
-U = np.cos(theta) * np.clip(img[:,:,3], a_min=0, a_max=1)
-V = np.sin(theta) * np.clip(img[:,:,3], a_min=0, a_max=1)
-
-q = ax.quiver(X / world_coords_to_px,  Y / world_coords_to_px, U[Y, X], V[Y, X], color="white", headlength=0, headaxislength=0, headwidth=0, scale=50, units='width')
-
-scalebar = AnchoredSizeBar(
-    ax.transData,
-    size=1.0,                 # 1 cm in data units
-    label="1 mm",
-    loc="lower center",
-    pad=0.3,
-    color="black",
-    frameon=False,
-    size_vertical=0.02,
-    fontproperties=fm.FontProperties(size=10),
-    bbox_to_anchor=(0.9, -0.3),      # x centered, y below axes
-    bbox_transform=ax.transAxes  # interpret anchor in axes coords
-)
-
-ax.add_artist(scalebar)
-
-plt.show()
+plt_eta_theta(eta, theta, mask)
+plt.savefig("Averaged_new.pdf", dpi=150)

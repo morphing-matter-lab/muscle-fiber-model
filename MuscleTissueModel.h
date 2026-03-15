@@ -76,6 +76,7 @@ public:
   Eigen::VectorXd I5(const Eigen::Ref<const Eigen::VectorXd> X) const;
   Eigen::MatrixXd theta0(const Eigen::Ref<const Eigen::VectorXd> X) const;
   Eigen::MatrixXd phi_ODE(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double kd, double dt, int n);
+  Eigen::MatrixXd phi_ODE_sqrt(const Eigen::Ref<const Eigen::VectorXd> X, double k0, double k1, double k2, double kd, double dt, int n);
 
   void setStretch(double stretch)
   {
@@ -109,5 +110,6 @@ public:
   double _kspring;
   std::vector<MuscleTissueElement> _elements;
   std::vector<std::tuple<int, double, double>> _post_anchors;
-  std::vector<std::tuple<int, int>> _springs;
+  Eigen::VectorXi _J;
+  Eigen::MatrixXi _L;
 };
