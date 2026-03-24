@@ -67,9 +67,9 @@ def run_simulation(params):
     for i in range(2, 5):
         mask = (eta_measured[i-1] > 0).astype(float)
         error = mask * area_weights * np.abs(eta - eta_measured[i-1])
-        total_error += np.sum(error) / 0.5 / np.sum(mask * area_weights)
+        total_error += np.sum(error) / 0.5 / np.sum(mask * area_weights) / 3
     
-    return params[0], params[1], params[2], total_error, np.sum(area_weights * total_mask * eta) / np.sum(area_weights * total_mask), np.min(igl.doublearea(V_, F)) 
+    return params[0], params[1], params[2], total_error
 
 V = np.load("V_3post.npy")
 Phi = np.load("Phi_3post.npy")
@@ -88,43 +88,27 @@ fixed_dofs = np.sort(fixed_dofs)
 
 eta_measured = []
 for i in range(1, 5):
-  eta_measured.append(np.load(f'data/3 post/eta{i}_measured_new.npy'))
+  eta_measured.append(np.load(f'data/3 post/eta{i}_measured.npy'))
 
 #   img = cv2.imread(f'data/3 post/orientation{i}_dispersion_new.png', cv2.IMREAD_UNCHANGED)
 #   dispersion_data = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2]) * 0.5 / 256
 #   eta_measured.append(fabsim_py.image_data_to_mesh(V, F, dispersion_data, world_coords_to_px))
-#   np.save(f'data/3 post/eta{i}_measured_new.npy', eta_measured[i-1])
+#   np.save(f'data/3 post/eta{i}_measured.npy', eta_measured[i-1])
 
 area_weights = np.clip(igl.doublearea(V, F), a_min=0, a_max=np.inf)
 print(np.sum(area_weights * (eta_measured[3]+eta_measured[1]+eta_measured[2])/3) / np.sum(area_weights))
 
 
-k0 = np.array([5, 7, 20, 30, 40, 50]) * 1e-6
-k1 = np.array([5, 7, 20, 30, 40, 50]) * 1e-3
-kd = np.array([5, 7, 20, 30, 40, 50]) * 1e-2
+k0 = np.linspace(1e-3, 1e-2, 10)
+k1 = np.linspace(1e-3, 1e-2, 10)
+kd = np.linspace(1e-4, 1e-3, 10)
 
-param_list = [[0.0001, 0.0004, 0.001], [0.0001, 0.0004, 0.0005],
-[0.0001, 0.0004, 0.005],
-[0.0001, 0.0001, 0.001],
-[0.0001, 0.0001, 0.0005],
-[0.0001, 0.001, 0.001],
-[0.0001, 0.001, 0.0005],
-[0.0001, 0.001, 0.005],
-[0.0005, 0.0004, 0.001],
-[0.0005, 0.0004, 0.0005],
-[0.0005, 0.001, 0.001],
-[0.0005, 0.001, 0.0005],
-[0.0005, 0.001, 0.005],
-[0.00005, 0.004, 0.001],
-[0.00005, 0.004, 0.0005],
-[0.00005, 0.0001, 0.001],
-[0.00005, 0.0001, 0.0005]
-]
+param_list = []
 
-# for i in range(len(k0)):
-#   for j in range(len(k1)):
-#     for k in range(len(kd)):
-#        param_list.append([k0[i], k1[j], kd[k]])
+for i in range(len(k0)):
+  for j in range(len(k1)):
+    for k in range(len(kd)):
+       param_list.append([k0[i], k1[j], kd[k]])
 
 # print(run_simulation([0, 2e-2, 4e-1]))
 
@@ -138,9 +122,7 @@ R = np.array(results)
 np.set_printoptions(threshold=R.shape[0] * R.shape[1])
 print(R)
 print(np.min(R[:,3]))
-print(np.min(R[:,4]))
 print(R[np.argmin(R[:,3]), :])
-print(R[np.argmin(R[:,4]), :])
 
 
 # np.save('V_test.npy', V)
