@@ -60,23 +60,23 @@ dirs[:,1] *= -1
 area_weights = np.clip(igl.doublearea(V, F), a_min=0, a_max=np.inf)
 
 # data_path = "data/3.5hrs/"
-# data_path = "data/72h/"
-data_path = "data/7D/"
+data_path = "data/72h/"
+# data_path = "data/7D/"
 n = 4
 
 
 eta_errors = np.zeros((n,n))
 eta_measured = []
-for i in range(1, 5):
-  if i == 3:
-    continue
-  # img = cv2.imread(f'{data_path}orientation{i}_dispersion_new.png', cv2.IMREAD_UNCHANGED)
-  # dispersion_data = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2]) * 0.5 / 256
-  # eta_measured.append(fabsim_py.image_data_to_mesh(V, F, dispersion_data, world_coords_to_px))
-  if i == 4:
-     i -= 1
-  # np.save(f'{data_path}/eta{i}_measured_new.npy', eta_measured[i-1])
-  eta_measured.append(np.load(f'{data_path}eta{i}_measured_new.npy'))
+for i in range(1, 4):
+  # if i == 3:
+  #   continue
+  img = cv2.imread(f'{data_path}orientation{i}_dispersion_new.png', cv2.IMREAD_UNCHANGED)
+  dispersion_data = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2]) * 0.5 / 256
+  eta_measured.append(fabsim_py.image_data_to_mesh(V, F, dispersion_data, world_coords_to_px))
+  # if i == 4:
+  #    i -= 1
+  np.save(f'{data_path}/eta{i}_measured.npy', eta_measured[i-1])
+  # eta_measured.append(np.load(f'{data_path}eta{i}_measured.npy'))
   mask = (eta_measured[i-1] > 0).astype(float)
   eta_errors[0,i] = np.sum(mask * area_weights * np.abs(eta - eta_measured[i-1])) / 0.5 / np.sum(mask * area_weights)
   eta_errors[i,0] = np.sum(mask * area_weights * np.abs(eta - eta_measured[i-1])) / 0.5 / np.sum(mask * area_weights)
@@ -131,15 +131,15 @@ angles = np.mod(angles, np.pi)
 area_weights = np.clip(igl.doublearea(V, F), a_min=0, a_max=np.inf)
 
 theta_errors = np.zeros((n,n))
-for i in range(1, 5):
-  if i == 3:
-    continue
+for i in range(1, 4):
+  # if i == 3:
+  #   continue
   img = cv2.imread(data_path + f'orientation{i}_mean.png', cv2.IMREAD_UNCHANGED)
   theta_data = from_8bit_rgb(img[:,:,0], img[:,:,1], img[:,:,2]) * np.pi / 256
   vectors = fabsim_py.orientation_data_to_mesh(V, F, theta_data, world_coords_to_px)
   angle_measured.append(np.atan2(vectors[:,1], vectors[:,0]) + np.pi / 2)
-  if i == 4:
-     i -= 1
+  # if i == 4:
+  #    i -= 1
   np.save(f'{data_path}/theta{i}_measured.npy', angle_measured[i-1])
   # angle_measured.append(np.load(f'{data_path}theta{i}_measured.npy'))
   error = np.abs(angle_measured[i - 1] - angles)

@@ -80,7 +80,7 @@ for i in range(1,5):
     mask_img = np.array(cv2.imread(f"{data_path}mask{i}.png", cv2.IMREAD_UNCHANGED), dtype=np.float32)
     mask_i = (mask_img[:,:] > 128).astype(np.float32)
 
-    input_img = np.array(cv2.imread(data_path + f'orientation{i}_dispersion_new.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
+    input_img = np.array(cv2.imread(data_path + f'orientation{i}_dispersion.png', cv2.IMREAD_UNCHANGED), dtype=np.float32)
     eta_i = from_8bit_rgb(input_img[:,:,0], input_img[:,:,1], input_img[:,:,2]) * 0.5 / 256
 
     eta += eta_i * input_img[:,:,3]
@@ -92,7 +92,7 @@ for i in range(1,5):
     z += (np.cos(theta_i) + 1j * np.sin(theta_i)) * input_img[:,:,3]
 
     plt_eta_theta(eta_i, theta_i, mask_i)
-    plt.savefig(f"Sample{i}_new.pdf", dpi=150)
+    plt.savefig(f"Sample{i}.pdf", dpi=150)
 
 eta /= np.clip(alpha, a_min=1, a_max=1000000)
 eta = eta * mask
@@ -100,4 +100,4 @@ eta = eta * mask
 theta = np.mod(np.angle(z), np.pi)
 
 plt_eta_theta(eta, theta, mask)
-plt.savefig("Averaged_new.pdf", dpi=150)
+plt.savefig("Averaged.pdf", dpi=150)

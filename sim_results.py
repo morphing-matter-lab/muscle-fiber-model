@@ -44,8 +44,8 @@ theta_file = "data/sim/7D_theta.png"
 # Phi = np.load("Phi_40mean.npy")
 # V = np.load("V_720_upper.npy")
 # Phi = np.load("Phi_720_upper.npy")
-V = np.load("V_7D.npy")
-Phi = np.load("Phi_7D.npy")
+V = np.load("data/V_7D.npy")
+Phi = np.load("data/Phi_7D.npy")
 
 mesh = pv.read("data/top_surface_ultrahighres_deflect.obj")
 # mesh = pv.read("data/top_surface_3posts_ultrahighres.obj")
@@ -131,7 +131,7 @@ V = -np.sin(theta) * img[:,:,3] / 255
 
 q = plt.quiver(X / world_coords_to_px,  Y / world_coords_to_px, U[Y, X], V[Y, X], color="white", headlength=0, headaxislength=0, headwidth=0, scale=50, units='width')
 
-plt.savefig("Sim_new.pdf", dpi=300)
+plt.savefig("Sim.pdf", dpi=300)
 plt.show()
 
 
